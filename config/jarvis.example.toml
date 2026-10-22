@@ -1,0 +1,126 @@
+# Configuração de permissões do JARVIS.
+# Copie para config/jarvis.toml e ajuste. Variáveis como %USERPROFILE% e
+# %LOCALAPPDATA% são expandidas. Recarregue em Configurações → Sistema →
+# "Recarregar configuração" (ou reinicie).
+#
+# Tudo o que o JARVIS pode abrir/executar no Windows está listado aqui.
+# Não existe execução livre de PowerShell/CMD.
+
+# Pastas onde o JARVIS pode procurar e abrir arquivos.
+allowed_dirs = [
+  "%USERPROFILE%\\Documents",
+  "%USERPROFILE%\\Desktop",
+  "%USERPROFILE%\\Downloads",
+  "%USERPROFILE%\\projetos",
+]
+
+[[apps]]
+name = "VS Code"
+aliases = ["vscode", "vs code", "visual studio code", "code", "editor"]
+command = "%LOCALAPPDATA%\\Programs\\Microsoft VS Code\\Code.exe"
+
+[[apps]]
+name = "Navegador"
+aliases = ["chrome", "google chrome", "navegador"]
+command = "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe"
+
+[[apps]]
+name = "Explorador de Arquivos"
+aliases = ["explorer", "explorador", "arquivos"]
+command = "explorer.exe"
+
+[[apps]]
+name = "Terminal"
+aliases = ["terminal", "windows terminal", "powershell"]
+command = "wt.exe"
+
+[[apps]]
+name = "Calculadora"
+aliases = ["calculadora", "calc"]
+command = "calc.exe"
+
+[[apps]]
+name = "Bloco de Notas"
+aliases = ["bloco de notas", "notepad"]
+command = "notepad.exe"
+
+[[websites]]
+name = "GitHub"
+aliases = ["github", "git hub"]
+url = "https://github.com"
+
+[[websites]]
+name = "WhatsApp Web"
+aliases = ["whatsapp web"]
+url = "https://web.whatsapp.com"
+
+[[websites]]
+name = "Home Assistant"
+aliases = ["home assistant", "painel da casa"]
+url = "http://homeassistant.local:8123"
+
+[[projects]]
+name = "JARVIS"
+aliases = ["jarvis", "assistente"]
+path = "%USERPROFILE%\\projetos\\assistant"
+open_with = "VS Code"
+
+[[projects]]
+name = "APIs"
+aliases = ["projeto de apis", "apis", "minhas apis"]
+path = "%USERPROFILE%\\projetos\\apis"
+open_with = "VS Code"
+
+# Comandos de desenvolvimento pré-aprovados (executados sem shell, args fixos).
+[[dev_commands]]
+name = "git status do JARVIS"
+aliases = ["git status", "status do git"]
+executable = "git"
+args = ["status", "--short", "--branch"]
+cwd = "%USERPROFILE%\\projetos\\assistant"
+timeout = 30
+
+[[dev_commands]]
+name = "testes do backend"
+aliases = ["rodar testes", "testes"]
+executable = "%USERPROFILE%\\projetos\\assistant\\backend\\.venv\\Scripts\\python.exe"
+args = ["-m", "pytest", "-q"]
+cwd = "%USERPROFILE%\\projetos\\assistant\\backend"
+timeout = 600
+
+# Rotinas: sequências de ferramentas registradas. Cada passo passa pela mesma
+# política de permissões/confirmação. Aliases funcionam como frases-gatilho.
+[[routines]]
+name = "início do trabalho"
+aliases = ["inicio do trabalho", "comecar o dia", "desenvolvimento", "ambiente de desenvolvimento", "bom dia"]
+description = "Abre o ambiente de desenvolvimento e mostra as pendências"
+steps = [
+  { tool = "open_target", args = { target = "VS Code" } },
+  { tool = "open_target", args = { target = "GitHub" } },
+  { tool = "task_list", args = {} },
+]
+
+[[routines]]
+name = "saindo de casa"
+aliases = ["estou saindo de casa", "vou sair", "saindo"]
+description = "Desliga luzes e ar-condicionado"
+steps = [
+  { tool = "home_turn", args = { target = "luzes", on = false } },
+  { tool = "home_turn", args = { target = "ar condicionado", on = false } },
+]
+
+[[routines]]
+name = "boa noite"
+aliases = ["rotina de boa noite", "boa noite jarvis", "vou dormir"]
+description = "Executa a cena de boa noite no Home Assistant"
+steps = [
+  { tool = "home_scene", args = { name = "boa noite" } },
+]
+
+# Nomes amigáveis para entidades do Home Assistant (opcional; também
+# editáveis pela interface em Casa → Dispositivos).
+[[devices]]
+entity_id = "climate.ar_condicionado_quarto"
+name = "Ar-condicionado do quarto"
+aliases = ["ar", "ar condicionado", "ar do quarto", "tcl"]
+room = "Quarto"

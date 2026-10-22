@@ -1,0 +1,10 @@
+# Agente local no Windows: bandeja, atalho global e notificações.
+pystray>=0.19
+Pillow>=10
+keyboard>=0.13 ; sys_platform == "win32"
+win11toast>=0.35 ; sys_platform == "win32"
+winrt-Windows.Foundation>=2.0 ; sys_platform == "win32"
+winrt-Windows.Foundation.Collections>=2.0 ; sys_platform == "win32"
+winrt-Windows.UI.Notifications>=2.0 ; sys_platform == "win32"
+winrt-Windows.UI.Notifications.Management>=2.0 ; sys_platform == "win32"
+winrt-Windows.ApplicationModel>=2.0 ; sys_platform == "win32"

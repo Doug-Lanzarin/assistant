@@ -1,0 +1,7 @@
+# Voz local (CPU). ~250 MB de pacotes + modelos baixados sob demanda.
+faster-whisper>=1.1
+sounddevice>=0.5
+openwakeword>=0.6
+onnxruntime>=1.18
+pyttsx3>=2.98 ; sys_platform == "win32"
+piper-tts>=1.3

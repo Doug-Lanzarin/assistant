@@ -1,0 +1,2 @@
+# Adaptador WhatsApp Web (automação de interface, opcional).
+playwright>=1.48
