@@ -450,8 +450,34 @@ def _wa_send(o: str, t: str) -> Intent | None:
     return Intent("whatsapp_send", {"to": clean_tail(_orig(o, m, "to")), "text": text})
 
 
+_UNITS = {"um": 1, "uma": 1, "dois": 2, "duas": 2, "tres": 3, "três": 3, "quatro": 4, "cinco": 5, "seis": 6,
+          "sete": 7, "oito": 8, "nove": 9}
+_TENS = {"dezesseis": 16, "dezessete": 17, "dezoito": 18, "dezenove": 19, "vinte": 20, "trinta": 30}
+_ASR_FIXES = [
+    (re.compile(r"(?i)\b(a\s?condicionado|aconditionado|ar\s+condicionado|arcondicionado)\b"), "ar-condicionado"),
+    (re.compile(r"(?i)^abro\b"), "abra"),
+    (re.compile(r"(?i)^mandi\b"), "mande"),
+    (re.compile(r"(?i)\bgr?a[ul]s\b"), "graus"),
+]
+
+
+def normalize_transcript(text: str) -> str:
+    """Corrige padrões frequentes da transcrição de voz (números por extenso, termos técnicos)."""
+    for pat, rep in _ASR_FIXES:
+        text = pat.sub(rep, text)
+
+    def tens(m: re.Match) -> str:
+        t = _TENS[fold(m.group(1))]
+        u = _UNITS.get(fold(m.group(2)) if m.group(2) else "", 0)
+        return str(t + u)
+
+    text = re.sub(r"(?i)\b(vinte|trinta|dezesseis|dezessete|dezoito|dezenove)(?:\s+e\s+(um|uma|dois|duas|tr[eê]s|quatro|cinco|seis|sete|oito|nove))?\b", tens, text)
+    text = re.sub(r"\b([2-9]0) e ([1-9])\b", lambda m: str(int(m.group(1)) + int(m.group(2))), text)
+    return text
+
+
 def parse(text: str, wake_word: str = "jarvis") -> Intent | None:
-    original = strip_wake_word(text, wake_word)
+    original = normalize_transcript(strip_wake_word(text, wake_word))
     original = re.sub(r"\s+", " ", original).strip()
     folded = fold(original).rstrip(" .!")
     original = original[: len(folded)] if len(original) >= len(folded) else original

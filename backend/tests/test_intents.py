@@ -64,3 +64,31 @@ def test_intents(text, tool, args):
 def test_unknown_goes_to_ai():
     assert parse("Qual a capital da Austrália e por que ela foi escolhida?") is None
     assert parse("Explique o que é RAG em poucas palavras") is None
+
+
+# Transcrições reais do faster-whisper (voz sintetizada pt-BR), medidas em scripts/benchmark.py
+ASR = [
+    ("Jarvis, ajuste o ACONDITIONADO para 23 graus.", "climate_set", {"temperature": 23.0}),
+    ("que avise ajuste o ACondicionado para vinte e três graus", "climate_set", {"temperature": 23.0}),
+    ("Já vi isso, mandi uma mensagem para o João dizendo que estou chegando.", "whatsapp_send", {"to": "João"}),
+    ("Jarvis, abro o VS Code.", "open_target", {"target": "VS Code"}),
+    ("Da Viz, salve o que copiei como consulta SQL de coletas.", "clipboard_save", {"title": "consulta SQL de coletas"}),
+    ("Avis, quais tarefas estão pendentes?", "task_list", {}),
+    ("ajuste o ar para 20 e 3 graus", "climate_set", {"temperature": 23.0}),
+    ("Jarvis, ajuste o ar para dezoito graus", "climate_set", {"temperature": 18.0}),
+]
+
+
+@pytest.mark.parametrize("text,tool,args", ASR)
+def test_asr_variants(text, tool, args):
+    intent = parse(text)
+    assert intent is not None and intent.tool == tool, (text, intent)
+    for k, v in args.items():
+        assert intent.args.get(k) == v
+
+
+def test_wake_word_not_stripped_inside_words():
+    from app.orchestrator.textnorm import strip_wake_word
+
+    assert strip_wake_word("Avisar o time amanhã") == "Avisar o time amanhã"
+    assert strip_wake_word("Davison é meu colega") == "Davison é meu colega"

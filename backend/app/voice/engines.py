@@ -58,11 +58,13 @@ class STTEngine:
             log.info("Modelo Whisper '%s' carregado em %.1fs", name, time.perf_counter() - t0)
             return self._model
 
-    def transcribe_file(self, path: Path, model: str = "base", language: str = "pt") -> dict[str, Any]:
+    def transcribe_file(self, path: Path, model: str = "base", language: str = "pt", prompt: str | None = None,
+                        hotwords: str | None = "Jarvis") -> dict[str, Any]:
         m = self._load(model)
         t0 = time.perf_counter()
         segments, info = m.transcribe(str(path), language=language, vad_filter=True, beam_size=1,
-                                      condition_on_previous_text=False)
+                                      condition_on_previous_text=False, initial_prompt=prompt or None,
+                                      hotwords=hotwords or None)
         text = " ".join(s.text.strip() for s in segments).strip()
         return {"text": text, "language": info.language, "duration_s": round(info.duration, 2),
                 "processing_s": round(time.perf_counter() - t0, 2), "model": model}

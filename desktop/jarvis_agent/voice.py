@@ -30,6 +30,27 @@ SAMPLE_RATE = 16000
 FRAME = 1280  # 80 ms, tamanho esperado pelo openWakeWord
 
 
+def load_wake_model(name: str):
+    """Carrega o modelo do openWakeWord nas APIs 0.4 (wheels com modelos) e 0.6+ (download)."""
+    import inspect
+    import os
+
+    import openwakeword
+    from openwakeword.model import Model
+
+    params = inspect.signature(Model.__init__).parameters
+    if "wakeword_models" in params:
+        try:
+            openwakeword.utils.download_models([name])
+        except Exception:  # noqa: BLE001 - modelo pode já estar em cache
+            pass
+        return Model(wakeword_models=[name], inference_framework="onnx")
+    paths = [p for p in openwakeword.get_pretrained_model_paths() if os.path.basename(p).startswith(name)]
+    if not paths:
+        raise RuntimeError(f"Modelo de ativação '{name}' não encontrado")
+    return Model(wakeword_model_paths=paths)
+
+
 def _try_import(name: str):
     try:
         return __import__(name)
@@ -44,7 +65,7 @@ class VoiceEngine:
         self.sd = _try_import("sounddevice")
         self.np = _try_import("numpy")
         self.settings: dict[str, Any] = {"wake_word_enabled": False, "wake_model": "hey_jarvis", "wake_threshold": 0.5,
-                                         "stt_model": "base", "stt_language": "pt", "tts_engine": "sapi", "rate": 1.0,
+                                         "stt_model": "base", "stt_language": "pt", "stt_prompt": "", "tts_engine": "sapi", "rate": 1.0,
                                          "volume": 1.0, "input_device": None, "output_device": None, "tts_voice": ""}
         self._wake_thread: threading.Thread | None = None
         self._stop_wake = threading.Event()
@@ -103,7 +124,8 @@ class VoiceEngine:
     def transcribe(self, audio) -> str:
         model = self._whisper_model()
         segments, _ = model.transcribe(audio, language=self.settings["stt_language"], vad_filter=True, beam_size=1,
-                                       condition_on_previous_text=False)
+                                       condition_on_previous_text=False,
+                                       initial_prompt=self.settings.get("stt_prompt") or None, hotwords="Jarvis")
         return " ".join(s.text.strip() for s in segments).strip()
 
     def record_utterance(self, max_seconds: float = 12.0, silence_s: float = 0.9, start_timeout: float = 5.0):
@@ -179,14 +201,10 @@ class VoiceEngine:
         self._stop_wake.set()
 
     def _wake_loop(self) -> None:
-        import openwakeword
-        from openwakeword.model import Model
-
         np, sd = self.np, self.sd
         try:
             if self._oww is None:
-                openwakeword.utils.download_models([self.settings["wake_model"]])
-                self._oww = Model(wakeword_models=[self.settings["wake_model"]], inference_framework="onnx")
+                self._oww = load_wake_model(self.settings["wake_model"])
         except Exception as e:  # noqa: BLE001
             log.exception("Falha ao carregar modelo de ativação")
             self.set_state("error", error=f"modelo de ativação: {e}")

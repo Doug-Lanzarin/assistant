@@ -41,6 +41,8 @@ DEFAULTS: dict[str, dict[str, Any]] = {
         "wake_threshold": 0.5,
         "stt_model": "base",
         "stt_language": "pt",
+        # Vocabulário que orienta o Whisper (melhora muito "Jarvis", "ar-condicionado", nomes próprios).
+        "stt_prompt": "Jarvis, assistente pessoal. Comandos: Jarvis, salve o clipboard; consulta SQL; ar-condicionado em 23 graus; WhatsApp; VS Code; Home Assistant.",
         "tts_engine": "browser",  # browser | sapi | piper
         "tts_voice": "",
         "rate": 1.0,

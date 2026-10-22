@@ -1,5 +1,6 @@
 # Voz local (CPU). ~250 MB de pacotes + modelos baixados sob demanda.
 faster-whisper>=1.1
+av>=12,<16  # faster-whisper 1.2 usa av.open(metadata_errors=...), removido no PyAV 16+
 sounddevice>=0.5
 openwakeword>=0.6
 onnxruntime>=1.18

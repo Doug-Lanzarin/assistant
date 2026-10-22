@@ -228,7 +228,7 @@ async def transcribe(file: UploadFile = File(...), s: Services = Depends(service
     suffix = Path(file.filename or "audio.webm").suffix or ".webm"
     try:
         return await asyncio.to_thread(s.voice.stt.transcribe_bytes, data, suffix, model=cfg["stt_model"],
-                                       language=cfg["stt_language"])
+                                       language=cfg["stt_language"], prompt=cfg.get("stt_prompt"))
     except VoiceUnavailable as e:
         raise HTTPException(501, str(e)) from e
 

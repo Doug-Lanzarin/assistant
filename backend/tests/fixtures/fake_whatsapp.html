@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>WhatsApp (simulado)</title></head>
+<body>
+<!-- Página de TESTE que imita a estrutura mínima do WhatsApp Web usada pelo adaptador. -->
+<div role="textbox" contenteditable="true" data-tab="3" aria-label="Pesquisar" id="search"></div>
+<div id="pane-side"></div>
+<div id="conversation"></div>
+<footer><div contenteditable="true" id="composer"></div></footer>
+<script>
+const chats = [
+  { name: "João Silva", unread: 2, preview: "Você vem hoje?", messages: [] },
+  { name: "Maria", unread: 0, preview: "ok!", messages: [] },
+  { name: "João Pereira", unread: 1, preview: "Reunião às 10", messages: [] },
+];
+let open = null;
+function renderList(filter) {
+  const pane = document.getElementById("pane-side");
+  pane.innerHTML = "";
+  chats.filter(c => !filter || c.name.toLowerCase().includes(filter.toLowerCase())).forEach(c => {
+    const row = document.createElement("div");
+    row.setAttribute("role", "listitem");
+    row.innerHTML = `<span title="${c.name}">${c.name}</span><span dir="ltr">${c.preview}</span>` +
+      (c.unread ? `<span aria-label="${c.unread} mensagens não lidas">${c.unread}</span>` : "");
+    row.onclick = () => { open = c; renderConv(); };
+    pane.appendChild(row);
+  });
+}
+function renderConv() {
+  const conv = document.getElementById("conversation");
+  conv.innerHTML = "";
+  (open?.messages ?? []).forEach(m => {
+    const d = document.createElement("div");
+    d.className = "message-out";
+    d.innerHTML = `<span class="selectable-text">${m}</span><span data-icon="msg-check"></span>`;
+    conv.appendChild(d);
+  });
+}
+const search = document.getElementById("search");
+search.addEventListener("input", () => renderList(search.textContent));
+const composer = document.getElementById("composer");
+composer.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && open) {
+    e.preventDefault();
+    const text = composer.textContent;
+    if (open.name === "Maria") return; // simula falha: não envia
+    setTimeout(() => { open.messages.push(text); composer.textContent = ""; renderConv(); }, 300);
+  }
+});
+renderList("");
+</script>
+</body></html>

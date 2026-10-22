@@ -25,7 +25,12 @@ def normalize_key(text: str) -> str:
     return re.sub(r"\s+", " ", t).strip()
 
 
-_WAKE = re.compile(r"^\s*(ok\s+|ei\s+|hey\s+|oi\s+)?jarvis[\s,.:!-]*", re.I)
+# Inclui transcrições comuns de "Jarvis" pelo reconhecimento de fala.
+_WAKE = re.compile(
+    r"^\s*(ok\s+|ei\s+|hey\s+|oi\s+|e\s+)?(j[aá]\s+vi\s+isso|jarvis|j[aá]rvis|javis|jarves|jarbas|jarvas|j[aá]\s?vi[sz]?|"
+    r"da\s+vi[sz]|jav[ií]s|davis|tavis|garvis|que\s+avise|e\s+avise|avis)(?=[\s,.:!-]|$)[\s,.:!-]*",
+    re.I,
+)
 
 
 def strip_wake_word(text: str, wake: str = "jarvis") -> str:
