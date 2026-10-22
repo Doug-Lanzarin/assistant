@@ -38,6 +38,16 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
+class ConsoleFormatter(logging.Formatter):
+    """Linha legível para o terminal, com o mesmo mascaramento de segredos."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        line = f"{self.formatTime(record, '%H:%M:%S')} {record.levelname:<7} {record.name}: {record.getMessage()}"
+        if record.exc_info:
+            line += "\n" + self.formatException(record.exc_info)
+        return redact(line)
+
+
 def setup_logging(logs_dir: Path, level: str = "INFO", console: bool = True) -> None:
     logs_dir.mkdir(parents=True, exist_ok=True)
     root = logging.getLogger()
@@ -53,7 +63,7 @@ def setup_logging(logs_dir: Path, level: str = "INFO", console: bool = True) -> 
     root.addHandler(file_handler)
     if console:
         ch = logging.StreamHandler()
-        ch.setFormatter(JsonFormatter())
+        ch.setFormatter(ConsoleFormatter())
         ch._jarvis = True  # type: ignore[attr-defined]
         root.addHandler(ch)
 

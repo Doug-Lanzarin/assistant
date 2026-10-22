@@ -20,6 +20,7 @@ whatsapp-session/
 __pycache__/
 *.pyc
 .venv/
+.venv.old-*/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/

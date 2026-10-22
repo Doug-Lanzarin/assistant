@@ -26,12 +26,12 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 | 19 | WhatsApp opera dentro dos recursos disponíveis | 🧪 Cloud API e WhatsApp Web; 🪟 notificações; 🔌 contas |
 | 20 | Envio exige autorização | ✅ sempre confirma (não configurável) |
 | 21 | Ações reportam resultados verdadeiros | ✅ verificação de estado, releitura do clipboard, evidência de envio |
-| 22 | Testes essenciais passam | ✅ 158 + 19 |
+| 22 | Testes essenciais passam | ✅ 172 + 27 |
 | 23 | Credenciais protegidas | ✅ Fernet + arquivo 0600 (Linux); 🪟 DPAPI |
 | 24 | Backup e restauração funcionam | ✅ |
 | 25 | Consumo de recursos documentado | ✅ neste ambiente; 🪟 rodar `benchmark.py` no i5 |
-| 26 | Inicialização e encerramento confiáveis | ✅ supervisor (instância única, reinício, recuperação, parada limpa); 🪟 início com o Windows |
-| 27 | Documentação permite instalar, configurar e manter | ✅ README + 15 documentos |
+| 26 | Inicialização e encerramento confiáveis | ✅ `setup.bat` idempotente e retomável + `start.bat` (supervisor: instância única, porta, reinício, recuperação, parada limpa com Ctrl+C); 🪟 `winget`, Job Object e início com o Windows |
+| 27 | Documentação permite instalar, configurar e manter | ✅ README + 16 documentos (instalação e recuperação em `docs/INSTALACAO.md`) |
 
 ## Limitações conhecidas
 - ⚠️ **"Jarvis" sozinho como palavra de ativação** não existe pronto; usa-se "Hey Jarvis" (modelo inglês). Ele não detectou a voz portuguesa sintetizada, então é preciso validar com a sua voz. Atalho `Ctrl+Alt+J` e botão como alternativa.
@@ -46,7 +46,7 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 - ⚠️ **Um usuário:** o painel é pessoal (sem perfis múltiplos).
 
 ## Configurações externas pendentes (na ordem sugerida)
-1. **Windows:** rodar `scripts\install.ps1 -Voice` e a lista de verificação abaixo.
+1. **Windows:** rodar `setup.bat` e a lista de verificação abaixo.
 2. **IA:** chave da Anthropic e/ou Ollama + `qwen2.5:3b` (opcional: `paraphrase-multilingual` para embeddings).
 3. **Home Assistant:** URL + token de longa duração.
 4. **TCL:** modelo exato + app (TCL Home ou Intelligent AC) → integração no HA → `tcl.climate_entity`.
@@ -55,16 +55,20 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 7. Depois de validar: `scripts\autostart.ps1 -Enable`.
 
 ## Lista de verificação no seu Windows
-1. `scripts\install.ps1 -Voice` termina com "tudo certo" no `doctor`.
-2. `scripts\test.ps1`: 158 + 19 testes passam no Windows.
-3. `scripts\start.ps1` abre o painel → crie o usuário.
-4. Painel → cartão JARVIS: "Agente local conectado".
-5. Copie um texto no Bloco de Notas → Conversa: "salve o que copiei como teste" → copie outra coisa → "copie teste" → Ctrl+V no Bloco de Notas mostra o texto original.
-6. Copie uma chave falsa `sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx` → salve → o painel mostra "sensível · cifrado".
-7. "abra o VS Code" (ajuste o caminho em `config\jarvis.toml` se precisar).
-8. Configurações → Voz → "Falar agora" → diga "que horas são".
-9. Ligue a palavra de ativação → diga "Hey Jarvis" → teste e ajuste `wake_threshold`.
-10. "parar tudo" → "salve o que copiei" é recusado → "retomar operações".
-11. `scripts\stop.ps1` → nenhum `python.exe` do JARVIS fica no Gerenciador de Tarefas.
-12. `scripts\autostart.ps1 -Enable` → reinicie o Windows → painel acessível.
-13. `backend\.venv\Scripts\python scripts\benchmark.py` → anexe o JSON ao relatório de desempenho.
+1. `setup.bat` (dois cliques) termina com "configuração concluída"; se faltar Python ou Node.js, o `winget` os instala depois de perguntar. Verifique em `data\logs\setup-*.log` se nenhuma chave aparece.
+2. Rode `setup.bat` de novo: deve terminar em segundos, com "nada a fazer" e "preservado".
+3. `start.bat` (dois cliques) mostra "JARVIS pronto" e abre o orb; abra um segundo `start.bat`, que deve responder "já em execução".
+4. Ctrl+C na janela do `start.bat` → "Supervisor encerrado". Repita fechando a janela pelo X: nenhum `python.exe` do JARVIS deve ficar no Gerenciador de Tarefas (Job Object).
+5. Em Privacidade → Microfone, desative o acesso → `setup.bat` avisa que o Windows está bloqueando o microfone; reative.
+6. `setup.bat -Tests`: a suíte do backend passa no Windows.
+7. No orb aberto pelo `start.bat`, crie o usuário.
+8. Painel → cartão JARVIS: "Agente local conectado".
+9. Copie um texto no Bloco de Notas → Conversa: "salve o que copiei como teste" → copie outra coisa → "copie teste" → Ctrl+V no Bloco de Notas mostra o texto original.
+10. Copie uma chave falsa `sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxx` → salve → o painel mostra "sensível · cifrado".
+11. "abra o VS Code" (ajuste o caminho em `config\jarvis.toml` se precisar).
+12. Configurações → Voz → "Falar agora" → diga "que horas são".
+13. Ligue a palavra de ativação → diga "Hey Jarvis" → teste e ajuste `wake_threshold`.
+14. "parar tudo" → "salve o que copiei" é recusado → "retomar operações".
+15. `scripts\stop.ps1` → nenhum `python.exe` do JARVIS fica no Gerenciador de Tarefas.
+16. `scripts\autostart.ps1 -Enable` → reinicie o Windows → painel acessível.
+17. `backend\.venv\Scripts\python scripts\benchmark.py` → anexe o JSON ao relatório de desempenho.

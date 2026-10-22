@@ -2,6 +2,8 @@
 """Controle do JARVIS: iniciar, parar, reiniciar, status, diagnóstico, testes e backup.
 
 Uso (a partir da raiz do repositório):
+  python scripts/jarvisctl.py setup [--no-voice] [--whatsapp] [--ollama] [--tests] [--force]
+  python scripts/jarvisctl.py run [--no-browser] [--no-agent] [--whatsapp-web]   (usado pelo start.bat)
   python scripts/jarvisctl.py start [--dev] [--no-agent] [--whatsapp-web]
   python scripts/jarvisctl.py stop | restart | status | doctor | test
   python scripts/jarvisctl.py backup | restore ARQUIVO.zip
@@ -12,6 +14,8 @@ O comando ``start`` sobe um SUPERVISOR em segundo plano que mantém o backend
 (uvicorn) e o agente local vivos: reinicia após falha (com espera crescente)
 ou após um pedido de reinício controlado (código de saída 3), impede
 instâncias duplicadas e encerra os filhos de forma limpa no ``stop``.
+O comando ``run`` executa o mesmo supervisor em PRIMEIRO PLANO, com os logs
+no terminal, e encerra tudo com Ctrl+C ou ao fechar a janela.
 """
 
 from __future__ import annotations
@@ -24,9 +28,11 @@ import signal
 import socket
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
@@ -35,6 +41,8 @@ WIN = sys.platform == "win32"
 VENV_PY = BACKEND / ".venv" / ("Scripts/python.exe" if WIN else "bin/python")
 VENV_PYW = BACKEND / ".venv" / "Scripts" / "pythonw.exe"
 RESTART_CODE = 3
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import jarvis_setup  # noqa: E402 - módulo irmão em scripts/
 
 
 def data_dir() -> Path:
@@ -95,7 +103,7 @@ def read_pid() -> int | None:
 
 def health(timeout: float = 2.0) -> dict | None:
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port()}/api/health", timeout=timeout) as r:
+        with jarvis_setup._LOCAL.open(f"http://127.0.0.1:{port()}/api/health", timeout=timeout) as r:
             return json.loads(r.read())
     except (urllib.error.URLError, OSError, ValueError):
         return None
@@ -108,11 +116,71 @@ def port_in_use(p: int) -> bool:
 
 
 # --------------------------------------------------------------------------- supervisor
-def _spawn(cmd: list[str], env: dict) -> subprocess.Popen:
+def _spawn(cmd: list[str], env: dict, attach_as: str | None = None) -> subprocess.Popen:
     kw: dict = {"cwd": str(BACKEND), "env": env}
     if WIN:
         kw["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW  # type: ignore[attr-defined]
-    return subprocess.Popen(cmd, **kw)
+    if attach_as:
+        # Primeiro plano: a saída do processo aparece no terminal, com prefixo.
+        kw.update(stdout=subprocess.PIPE, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True,
+                  encoding="utf-8", errors="replace", bufsize=1)
+        env["PYTHONUNBUFFERED"] = "1"
+        env["PYTHONIOENCODING"] = "utf-8"
+    p = subprocess.Popen(cmd, **kw)
+    if attach_as:
+        threading.Thread(target=_pump, args=(p, attach_as), daemon=True).start()
+    return p
+
+
+def _pump(p: subprocess.Popen, name: str) -> None:
+    assert p.stdout is not None
+    for line in p.stdout:
+        line = line.rstrip()
+        if line:
+            print(f"[{name}] {line}", flush=True)
+
+
+def _bind_children_to_this_process() -> None:
+    """Windows: coloca o supervisor num Job Object com KILL_ON_JOB_CLOSE.
+
+    Assim, se a janela do start.bat for fechada (ou o supervisor morrer), o
+    Windows encerra também o backend e o agente — nada fica órfão em segundo plano.
+    """
+    if not WIN:
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+
+        class BASIC(ctypes.Structure):
+            _fields_ = [("PerProcessUserTimeLimit", ctypes.c_int64), ("PerJobUserTimeLimit", ctypes.c_int64),
+                        ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
+                        ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
+                        ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
+                        ("SchedulingClass", wintypes.DWORD)]
+
+        class IO(ctypes.Structure):
+            _fields_ = [(n, ctypes.c_uint64) for n in ("r", "w", "o", "rb", "wb", "ob")]
+
+        class EXT(ctypes.Structure):
+            _fields_ = [("BasicLimitInformation", BASIC), ("IoInfo", IO), ("ProcessMemoryLimit", ctypes.c_size_t),
+                        ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                        ("PeakJobMemoryUsed", ctypes.c_size_t)]
+
+        k32.CreateJobObjectW.restype = wintypes.HANDLE
+        k32.GetCurrentProcess.restype = wintypes.HANDLE
+        job = k32.CreateJobObjectW(None, None)
+        info = EXT()
+        info.BasicLimitInformation.LimitFlags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        ok = k32.SetInformationJobObject(wintypes.HANDLE(job), 9, ctypes.byref(info), ctypes.sizeof(info))
+        ok = ok and k32.AssignProcessToJobObject(wintypes.HANDLE(job), k32.GetCurrentProcess())
+        if not ok:
+            log(f"Aviso: não foi possível vincular os processos à janela (erro {ctypes.get_last_error()})")
+        globals()["_JOB_HANDLE"] = job  # mantém o handle aberto enquanto o supervisor viver
+    except Exception as e:  # noqa: BLE001
+        log(f"Aviso: Job Object indisponível ({e})")
 
 
 def _terminate(p: subprocess.Popen | None, name: str, grace: float = 10.0) -> None:
@@ -152,6 +220,7 @@ def supervise(args: argparse.Namespace) -> int:
     agent_env = dict(env)
     agent_env["PYTHONPATH"] = os.pathsep.join([str(REPO / "desktop"), str(BACKEND)])
 
+    attach = getattr(args, "attach", False)
     backend = agent = None
     failures = 0
     stopping = False
@@ -189,12 +258,10 @@ def supervise(args: argparse.Namespace) -> int:
                     log(f"Porta {port()} ocupada por outro programa; aguardando")
                     time.sleep(5)
                     continue
-                backend = _spawn(backend_cmd, env)
+                backend = _spawn(backend_cmd, env, "backend" if attach else None)
                 log(f"Backend iniciado (pid {backend.pid})")
                 for _ in range(60):
-                    if health():
-                        break
-                    if backend.poll() is not None:
+                    if health() or backend.poll() is not None or stopping:
                         break
                     time.sleep(0.5)
                 if health():
@@ -203,7 +270,7 @@ def supervise(args: argparse.Namespace) -> int:
                 if agent is not None:
                     log(f"Agente saiu com código {agent.returncode}; reiniciando")
                     time.sleep(3)
-                agent = _spawn(agent_cmd, agent_env)
+                agent = _spawn(agent_cmd, agent_env, "agente" if attach else None)
                 log(f"Agente iniciado (pid {agent.pid})")
             time.sleep(1)
     finally:
@@ -238,6 +305,94 @@ def cmd_start(args: argparse.Namespace) -> int:
         time.sleep(0.5)
     print("O supervisor foi iniciado, mas o backend ainda não respondeu. Veja data/logs/supervisor.log e jarvis.log.")
     return 1
+
+
+def _port_owner(p: int) -> str:
+    try:
+        import psutil
+
+        for c in psutil.net_connections("tcp"):
+            if c.laddr and c.laddr.port == p and c.status == psutil.CONN_LISTEN and c.pid:
+                proc = psutil.Process(c.pid)
+                return f"{proc.name()} (pid {c.pid})"
+    except Exception:  # noqa: BLE001,S110 - informação opcional (pode exigir permissões)
+        pass
+    return "outro programa"
+
+
+def _announce_when_ready(open_browser: bool, stop: threading.Event) -> None:
+    """A interface só é anunciada quando o backend responde E serve a página."""
+    url = f"http://127.0.0.1:{port()}/#/jarvis"
+    t0 = time.time()
+    while not stop.is_set():
+        h = health(1)
+        if h:
+            st, html = jarvis_setup.http_get(f"http://127.0.0.1:{port()}/")
+            if st == 200 and 'id="root"' in html:
+                bar = "=" * 64
+                print(f"\n{bar}\n  JARVIS pronto em {time.time() - t0:.0f} s — {url}\n"
+                      f"  Banco: {'ok' if h.get('db') else 'COM PROBLEMA'} · versão {h.get('version')}\n"
+                      f"  Logs: {data_dir() / 'logs'}\n"
+                      f"  Para encerrar: Ctrl+C nesta janela (ou feche a janela).\n{bar}\n", flush=True)
+                if open_browser:
+                    webbrowser.open(url)
+                return
+        if time.time() - t0 > 120:
+            print("\n[AVISO] O JARVIS ainda não respondeu após 2 minutos. Veja as mensagens acima e "
+                  f"{data_dir() / 'logs' / 'jarvis.log'}.\n", flush=True)
+            return
+        stop.wait(0.5)
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    """Primeiro plano (start.bat): verifica, inicia na ordem certa e encerra com Ctrl+C."""
+    print(f"JARVIS · {REPO}")
+    problems = jarvis_setup.check_ready()
+    if problems:
+        print("\nO JARVIS não pode iniciar:")
+        for p in problems:
+            print(f"  - {p}")
+        return 1
+    pid = read_pid()
+    if pid and health():
+        url = f"http://127.0.0.1:{port()}/#/jarvis"
+        print(f"O JARVIS já está em execução (pid {pid}). Abrindo {url}")
+        if not args.no_browser:
+            webbrowser.open(url)
+        return 0
+    if pid:
+        print(f"Há um supervisor do JARVIS em execução (pid {pid}), mas ele não responde. "
+              "Encerre-o com scripts\\stop.ps1 e tente de novo.")
+        return 1
+    if port_in_use(port()):
+        if health():
+            print(f"A porta {port()} já tem um JARVIS respondendo (iniciado fora deste script). "
+                  f"Abra http://127.0.0.1:{port()}/#/jarvis ou encerre-o antes.")
+        else:
+            print(f"A porta {port()} está ocupada por {_port_owner(port())}. Feche esse programa ou defina outra porta "
+                  "em JARVIS_PORT no arquivo .env.")
+        return 1
+    os.environ.setdefault("JARVIS_LOG_CONSOLE", "1")
+    _bind_children_to_this_process()
+    print("Iniciando: banco e API → interface → agente local (voz, clipboard, automação)…  (Ctrl+C encerra)\n")
+    stop = threading.Event()
+    threading.Thread(target=_announce_when_ready, args=(not args.no_browser, stop), daemon=True).start()
+    args.attach = True
+    try:
+        return supervise(args)
+    finally:
+        stop.set()
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    return jarvis_setup.run_setup(args)
+
+
+def cmd_setup_status(args: argparse.Namespace) -> int:
+    problems = jarvis_setup.check_ready()
+    for p in problems:
+        print(f"  - {p}")
+    return 1 if problems else 0
 
 
 def cmd_stop(args: argparse.Namespace) -> int:
@@ -288,7 +443,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
 
     print(f"Sistema: {sys.platform} · Python {sys.version.split()[0]}")
     check("Python 3.11+", sys.version_info >= (3, 11), "instale Python 3.11 ou superior (python.org)")
-    check("Ambiente virtual do backend", VENV_PY.exists(), "rode scripts\\install.ps1")
+    check("Ambiente virtual do backend", VENV_PY.exists(), "execute setup.bat")
     py = python()
     code = ("import fastapi, pydantic, httpx, numpy, cryptography, psutil, anthropic, websockets, pypdf, docx; print('ok')")
     r = subprocess.run([py, "-c", code], capture_output=True, text=True, check=False)
@@ -326,7 +481,7 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     free = shutil.disk_usage(d).free / 1e9
     check(f"Espaço livre em disco ({free:.1f} GB)", free > 1, "libere espaço")
     h = health()
-    info("Backend respondendo", h is not None, "inicie com scripts\\start.ps1")
+    info("Backend respondendo", h is not None, "inicie com start.bat")
     if port_in_use(port()) and not h:
         check(f"Porta {port()} livre", False, "outro programa está usando a porta; defina JARVIS_PORT")
     print("\nResultado:", "tudo certo para executar." if ok else "há itens obrigatórios a corrigir.")
@@ -430,16 +585,31 @@ def main() -> int:
         p.add_argument("--no-agent", action="store_true", help="não iniciar o agente local")
         p.add_argument("--whatsapp-web", action="store_true", help="habilitar WhatsApp Web no agente")
         p.add_argument("--foreground", action="store_true", help=argparse.SUPPRESS)
-    for name in ("stop", "status", "doctor", "test", "backup", "env-report"):
+    p = sub.add_parser("run", help="inicia em primeiro plano (start.bat)")
+    p.add_argument("--no-browser", action="store_true", help="não abrir o navegador")
+    p.add_argument("--no-agent", action="store_true", help="não iniciar o agente local")
+    p.add_argument("--whatsapp-web", action="store_true", help="habilitar WhatsApp Web no agente")
+    p.add_argument("--dev", action="store_true", help=argparse.SUPPRESS)
+    p = sub.add_parser("setup", help="configuração inicial (setup.bat)")
+    p.add_argument("--voice", dest="voice", action="store_true", default=None, help="instalar voz local (padrão)")
+    p.add_argument("--no-voice", dest="voice", action="store_false", help="não instalar voz local")
+    p.add_argument("--whatsapp", action="store_true", help="instalar o adaptador WhatsApp Web (~150 MB)")
+    p.add_argument("--ollama", action="store_true", help="baixar o modelo local configurado no Ollama (~1,9 GB)")
+    p.add_argument("--tests", action="store_true", help="instalar e rodar a suíte de testes do backend")
+    p.add_argument("--offline", action="store_true", help="não baixar modelos de voz")
+    p.add_argument("--force", action="store_true", help="reinstalar dependências e recompilar a interface")
+    p.add_argument("--log", help=argparse.SUPPRESS)
+    for name in ("stop", "status", "doctor", "test", "backup", "env-report", "setup-status"):
         sub.add_parser(name)
     p = sub.add_parser("restore")
     p.add_argument("file")
     p = sub.add_parser("autostart")
     p.add_argument("action", choices=["enable", "disable", "status"])
     args = ap.parse_args()
-    handlers = {"start": cmd_start, "stop": cmd_stop, "restart": cmd_restart, "status": cmd_status, "doctor": cmd_doctor,
+    jarvis_setup.load_env()  # .env do projeto (não sobrescreve variáveis já definidas)
+    handlers = {"setup": cmd_setup, "run": cmd_run, "start": cmd_start, "stop": cmd_stop, "restart": cmd_restart, "status": cmd_status, "doctor": cmd_doctor,
                 "test": cmd_test, "backup": cmd_backup, "restore": cmd_restore, "autostart": cmd_autostart,
-                "env-report": cmd_env}
+                "env-report": cmd_env, "setup-status": cmd_setup_status}
     return handlers[args.cmd](args)
 
 

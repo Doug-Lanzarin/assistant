@@ -56,7 +56,8 @@ def create_app(env: Settings | None = None, services: Services | None = None) ->
     env = env or get_settings()
     env.ensure_dirs()
     if env.env != "test":
-        setup_logging(env.logs_dir, env.log_level, console=env.env == "development")
+        setup_logging(env.logs_dir, env.log_level,
+                      console=env.log_console if env.log_console is not None else env.env == "development")
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):

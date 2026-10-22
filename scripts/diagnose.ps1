@@ -1,4 +1,4 @@
-<# .SYNOPSIS  Diagnóstico completo: dependências, configuração, banco, portas e ambiente. #>
+﻿<# .SYNOPSIS  Diagnóstico completo: dependências, configuração, banco, portas e ambiente. #>
 . "$PSScriptRoot\_common.ps1"
 $code = Invoke-JarvisCtl "doctor"
 Invoke-JarvisCtl "env-report" | Out-Null

@@ -4,12 +4,12 @@
 > Branch: `claude/jarvis-v1`.
 
 ## Resumo
-O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 158 testes de backend, 27 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
+O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 172 testes de backend, 27 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
 
 ## Etapas
 | Etapa | Situação | Observações |
 |---|---|---|
-| 1. Diagnóstico e planejamento | ✅ concluída | o ambiente de desenvolvimento é Linux em nuvem (Xeon 4 vCPU, 15 GB), **não** o notebook Windows; o diagnóstico real do Windows é feito por `scripts\install.ps1` (gera `data\environment-report.json`) |
+| 1. Diagnóstico e planejamento | ✅ concluída | o ambiente de desenvolvimento é Linux em nuvem (Xeon 4 vCPU, 15 GB), **não** o notebook Windows; o diagnóstico real do Windows é feito pelo `setup.bat` (gera `data\setup-report.json` e `data\logs\setup-*.log`) |
 | 2. Fundação | ✅ | FastAPI, SQLite + migrações, logs JSON com rotação, autenticação, segredos, registro de ferramentas, supervisor, scripts |
 | 3. IA e conversação | ✅ (provedores reais pendentes) | interpretador pt-BR offline, Claude (SDK oficial), Ollama/compatível OpenAI, fallback, orçamento, cancelamento |
 | 4. Segundo cérebro | ✅ | memórias tipadas com estado e confiança, RAG híbrido, documentos, projetos, tarefas, lembretes, grafo, consolidação, interface |
@@ -20,11 +20,14 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 | 9. WhatsApp | 🧪 simulada | Cloud API (envio, webhook HMAC), WhatsApp Web (Playwright, página simulada), notificações (WinRT, não testado) |
 | 10. Estabilização | ✅ | backup/restauração, diagnóstico, autostart, recuperação de falhas, documentação, relatórios |
 
+## Instalação e inicialização
+`setup.bat` (configuração idempotente e retomável: pré-requisitos via `winget` com confirmação, ambiente virtual, dependências, interface, configuração, banco, IA híbrida, voz, microfone, testes de integridade, relatório e indicador) e `start.bat` (verificações, ordem de inicialização, logs na janela, encerramento com Ctrl+C). Validados numa cópia limpa em Linux e no `cmd` do Wine; **pendente no Windows real**. Ver [docs/INSTALACAO.md](docs/INSTALACAO.md).
+
 ## Interface de voz (orb)
 Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Piper e níveis do agente) e **máquina de estados explícita** (OFF, IDLE azul profundo, LISTENING verde-ciano, THINKING violeta, SPEAKING azul elétrico, ERROR vermelho), alimentada só por eventos reais de microfone, processamento e TTS. Validada ponta a ponta com áudio real no Chromium: correlação de 0,99 entre a amplitude da voz e o raio do núcleo. Ver [docs/ORB.md](docs/ORB.md).
 
 ## Testes executados (2026-10-22)
-- `backend`: **158 aprovados** (`python -m pytest -q`), ruff sem pendências.
+- `backend`: **172 aprovados** (`python -m pytest -q`), ruff sem pendências.
 - `frontend`: **27 aprovados** (`npm test`), `tsc` estrito e build ok.
 - E2E: painel real no Chromium (todas as telas, desktop e celular), supervisor (instância única, reinício controlado, `kill -9` → recuperação, parada limpa), agente real via WebSocket.
 - Voz: Piper → faster-whisper (tiny/base/small) e custo do openWakeWord.
@@ -39,7 +42,7 @@ Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Pip
 - O Ollama não pôde ser baixado aqui (proxy bloqueou o GitHub de terceiros); o caminho de IA local foi validado com **llama.cpp server** (mesma API compatível com OpenAI) e Qwen2.5-1.5B. Modelos de 1,5B escolhem ferramentas mal: use ≥3B (`qwen2.5:3b`) no dia a dia.
 
 ## Dependências externas (pendentes)
-1. **Windows 11 + i5 + 16 GB:** rodar `scripts\install.ps1 -Voice` e a lista de verificação em [docs/FUNCIONALIDADES.md](docs/FUNCIONALIDADES.md#lista-de-verificação-no-seu-windows).
+1. **Windows 11 + i5 + 16 GB:** rodar `setup.bat` e depois `start.bat` e a lista de verificação em [docs/FUNCIONALIDADES.md](docs/FUNCIONALIDADES.md#lista-de-verificação-no-seu-windows).
 2. **Chave Anthropic** (opcional) e/ou **Ollama** + `qwen2.5:3b`.
 3. **Home Assistant:** URL + token de longa duração.
 4. **Ar TCL:** modelo exato + app usado → integração comunitária no HA → `tcl.climate_entity`.
@@ -47,7 +50,7 @@ Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Pip
 6. **Alexa:** Nabu Casa ou skill manual (+ Alexa Media Player para anúncios).
 
 ## Próximas tarefas
-1. Executar a lista de verificação no Windows e registrar os resultados aqui.
+1. Executar `setup.bat` e `start.bat` no Windows e a lista de verificação, e registrar os resultados aqui.
 2. Rodar `scripts\benchmark.py` no i5 e atualizar o relatório de desempenho.
 3. Validar o clipboard Win32 (texto grande, Unicode, CF_HDROP) e a abertura de apps reais.
 4. Testar a palavra de ativação com voz real; se não for confiável, treinar o modelo "Jarvis".

@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS  Ativa/desativa o início do JARVIS junto com o Windows (pasta Inicializar do usuário, sem admin).
 .EXAMPLE   scripts\autostart.ps1 -Enable
 #>

@@ -1,4 +1,4 @@
-# Funções compartilhadas pelos scripts do JARVIS (Windows PowerShell 5.1+).
+﻿# Funções compartilhadas pelos scripts do JARVIS (Windows PowerShell 5.1+).
 $ErrorActionPreference = "Stop"
 $Script:Repo = Split-Path -Parent $PSScriptRoot
 $Script:Backend = Join-Path $Repo "backend"
@@ -7,7 +7,7 @@ $Script:Ctl = Join-Path $PSScriptRoot "jarvisctl.py"
 
 function Get-JarvisPython {
     if (Test-Path $Script:VenvPy) { return $Script:VenvPy }
-    throw "Ambiente virtual não encontrado. Rode primeiro: scripts\install.ps1"
+    throw "Ambiente virtual não encontrado. Rode primeiro o setup.bat (na pasta do JARVIS)"
 }
 
 function Invoke-JarvisCtl {

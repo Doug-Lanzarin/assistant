@@ -1,4 +1,4 @@
-<# .SYNOPSIS  Reinicia o JARVIS. Aceita os mesmos parâmetros de start.ps1. #>
+﻿<# .SYNOPSIS  Reinicia o JARVIS. Aceita os mesmos parâmetros de start.ps1. #>
 param([switch]$Dev, [switch]$NoAgent, [switch]$WhatsAppWeb)
 . "$PSScriptRoot\_common.ps1"
 $a = @("restart")

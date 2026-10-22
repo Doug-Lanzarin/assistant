@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS  Inicia o JARVIS (backend + agente local) em segundo plano e abre o painel.
 .PARAMETER Dev           Modo de desenvolvimento (recarrega ao editar o código).
 .PARAMETER NoAgent       Não inicia o agente local (sem clipboard/voz/apps).

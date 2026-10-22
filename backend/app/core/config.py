@@ -100,6 +100,8 @@ class Settings(BaseSettings):
     config_file: Path = REPO_ROOT / "config" / "jarvis.toml"
     frontend_dist: Path = REPO_ROOT / "frontend" / "dist"
     log_level: str = "INFO"
+    # Logs também no terminal (padrão: só em desenvolvimento). O start.bat liga.
+    log_console: bool | None = None
     cors_origins: list[str] = Field(
         default_factory=lambda: ["http://127.0.0.1:5173", "http://localhost:5173"]
     )

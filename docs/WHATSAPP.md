@@ -10,7 +10,7 @@ Por isso o JARVIS tem **três modos independentes** (Configurações → Integra
 | Modo | Leitura | Envio | Requisitos | Riscos / limites |
 |---|---|---|---|---|
 | `notifications` | prévias das notificações do WhatsApp Desktop | não | agente + pacotes `winrt` + permissão de acesso às notificações no Windows | só o que aparece na notificação; algumas versões do Windows negam essa API a apps não empacotados (o JARVIS detecta e informa) |
-| `web` | conversas não lidas visíveis no WhatsApp Web | sim, uma por vez, com confirmação e verificação | `scripts\install.ps1 -WhatsApp`; iniciar com `scripts\start.ps1 -WhatsAppWeb`; escanear o QR na janela aberta | automação de interface: quebra quando o site muda (seletores ajustáveis em `config/whatsapp_selectors.json`) e pode contrariar os Termos do WhatsApp; uso pessoal, sem envio em massa |
+| `web` | conversas não lidas visíveis no WhatsApp Web | sim, uma por vez, com confirmação e verificação | `setup.bat -WhatsApp`; iniciar com `start.bat --whatsapp-web`; escanear o QR na janela aberta | automação de interface: quebra quando o site muda (seletores ajustáveis em `config/whatsapp_selectors.json`) e pode contrariar os Termos do WhatsApp; uso pessoal, sem envio em massa |
 | `business` | mensagens recebidas pelo número empresarial (webhook) | sim, com confirmação | conta Meta Business, número dedicado, app na Meta, token, webhook público HTTPS | custos por mensagem; fora da janela de 24 h só templates aprovados |
 
 Em todos os modos: mensagens recebidas são **dados não confiáveis**. Uma mensagem nunca autoriza ações, e qualquer ação que a IA tente depois de ler mensagens exige a sua confirmação.

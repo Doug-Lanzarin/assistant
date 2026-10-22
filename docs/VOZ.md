@@ -14,7 +14,7 @@ Nada de áudio vai para a nuvem e nada é gravado em disco (o arquivo temporári
 ## Instalação
 
 ```powershell
-scripts\install.ps1 -Voice      # instala os pacotes e baixa os modelos (~250 MB)
+setup.bat                        # instala os pacotes e baixa os modelos (~600 MB no total; -NoVoice pula)
 # ou manualmente:
 backend\.venv\Scripts\pip install -r backend\requirements-voice.txt
 backend\.venv\Scripts\python scripts\download_voice_models.py --whisper base
