@@ -89,15 +89,35 @@ async def main():
         t0 = asyncio.get_event_loop().time()
         while asyncio.get_event_loop().time() - t0 < 40:
             s = await page.evaluate("window.__jarvisOrb()")
-            samples.append((round(asyncio.get_event_loop().time() - t0, 2), s["state"], s["level"], s["coreRadius"], s["source"]))
-            if s["state"] not in shots and s["state"] in ("listening", "thinking", "speaking"):
-                await page.wait_for_timeout(350 if s["state"] != "thinking" else 50)
+            samples.append(
+                (round(asyncio.get_event_loop().time() - t0, 2), s["state"], s["level"], s["coreRadius"], s["source"],
+                 s["glow"], s["waves"], [round(c) for c in s["color"]])
+            )
+            if s["state"] not in shots and s["state"] in ("LISTENING", "THINKING", "SPEAKING"):
+                await page.wait_for_timeout(350 if s["state"] != "THINKING" else 650)
                 await page.screenshot(path=f"{OUT}/2-{s['state']}.png")
                 shots.add(s["state"])
-            if "speaking" in shots and s["state"] == "idle":
+            if "SPEAKING" in shots and s["state"] == "IDLE":
                 break
             await page.wait_for_timeout(40)
         caption = await page.locator(".orb-caption").inner_text()
+        await page.wait_for_timeout(1500)
+        idle_color = (await page.evaluate("window.__jarvisOrb()"))["color"]
+        # Falha real de processamento: o backend responde 500 → ERROR (vermelho, 3 pulsos, brilho estável)
+        await page.route("**/api/chat", lambda r: r.fulfill(status=500, content_type="application/json",
+                                                              body='{"detail": "Erro interno simulado"}'))
+        await page.get_by_role("button", name="digitar").click()
+        await page.get_by_label("Mensagem para o JARVIS").fill("teste de falha")
+        await page.keyboard.press("Enter")
+        err = []
+        for _ in range(40):
+            o = await page.evaluate("window.__jarvisOrb()")
+            err.append((o["state"], round(o["coreRadius"], 1), [round(c) for c in o["color"]]))
+            if len(err) == 14:
+                await page.screenshot(path=f"{OUT}/2-error.png")
+            await page.wait_for_timeout(80)
+        await page.unroute("**/api/chat")
+        machine_log = await page.evaluate("window.__jarvisMachine().log")
         await page.get_by_role("button", name="Encerrar").click()
         await page.wait_for_timeout(2500)
         await cdp.send("Page.stopScreencast")
@@ -127,7 +147,7 @@ async def main():
 
     def by(st):
         return [s for s in samples if s[1] == st]
-    sp, li = by("speaking"), by("listening")
+    sp, li, th = by("SPEAKING"), by("LISTENING"), by("THINKING")
     print(
         json.dumps(
             {
@@ -138,7 +158,17 @@ async def main():
                     "level_max": round(max((s[2] for s in li), default=0), 2),
                     "sources": sorted({s[4] for s in li}),
                 },
-                "thinking_n": len(by("thinking")),
+                "thinking": {"n": len(th), "color": th[-1][7] if th else None},
+                "listening_color": li[-1][7] if li else None,
+                "speaking_color": sp[-1][7] if sp else None,
+                "speaking_glow_min_max": [round(min((s[5] for s in sp), default=0), 2), round(max((s[5] for s in sp), default=0), 2)],
+                "speaking_waves_max": max((s[6] for s in sp), default=0),
+                "listening_waves_max": max((s[6] for s in li), default=0),
+                "idle_color": [round(c) for c in idle_color],
+                "error_states": sorted({e[0] for e in err}),
+                "error_color": err[20][2],
+                "error_radius_first_vs_last": [[e[1] for e in err[:14]], [e[1] for e in err[-8:]]],
+                "machine_log": [f"{x['from']}→{x['to']} ({x['event']})" for x in machine_log],
                 "speaking": {
                     "n": len(sp),
                     "sources": sorted({s[4] for s in sp}),

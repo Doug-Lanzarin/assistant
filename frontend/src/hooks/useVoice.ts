@@ -21,6 +21,16 @@ export interface ListenOptions {
   maxSeconds?: number;
 }
 
+/** Eventos funcionais reais da voz (alimentam a máquina de estados do orb). */
+export type VoiceEvent =
+  | { type: "mic_started" }
+  | { type: "mic_stopped" }
+  | { type: "transcribing" }
+  | { type: "transcribed"; text: string | null }
+  | { type: "tts_started"; engine: "piper" | "browser" }
+  | { type: "tts_ended" }
+  | { type: "error"; reason: string };
+
 export function speechSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
@@ -29,9 +39,17 @@ const VAD_SPEECH = 0.42; // nível (0..1) considerado fala
 const VAD_SILENCE = 0.28;
 const SILENCE_MS = 1100;
 
-export function useVoice(settings: VoiceSettings | null) {
+export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEvent) => void) {
   const [state, setState] = useState<VoiceState>("idle");
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorState] = useState<string | null>(null);
+  const eventRef = useRef(onEvent);
+  eventRef.current = onEvent;
+  const emit = useCallback((e: VoiceEvent) => eventRef.current?.(e), []);
+  /** Registra o erro na tela e emite o evento de falha. */
+  const setError = useCallback((msg: string | null) => {
+    setErrorState(msg);
+    if (msg) eventRef.current?.({ type: "error", reason: msg });
+  }, []);
   const [ttsSource, setTtsSource] = useState<"piper" | "browser" | null>(null);
   const recRef = useRef<MediaRecorder | null>(null);
   const chunks = useRef<Blob[]>([]);
@@ -61,12 +79,14 @@ export function useVoice(settings: VoiceSettings | null) {
   }, []);
 
   const stopSpeaking = useCallback(() => {
+    const wasSpeaking = stateRef.current === "speaking";
     if (speechSupported()) window.speechSynthesis.cancel();
     audioRef.current?.pause();
     audioRef.current = null;
     cleanupTts();
     setState((s) => (s === "speaking" ? "idle" : s));
-  }, [cleanupTts]);
+    if (wasSpeaking) emit({ type: "tts_ended" });
+  }, [cleanupTts, emit]);
 
   const speakBrowser = useCallback(
     (clean: string) =>
@@ -83,19 +103,31 @@ export function useVoice(settings: VoiceSettings | null) {
         u.onstart = () => {
           words.current.start();
           setTtsSource("browser");
+          stateRef.current = "speaking";
           setState("speaking");
+          emit({ type: "tts_started", engine: "browser" });
         };
         u.onboundary = () => words.current.word();
-        const done = () => {
+        let finished = false;
+        const done = (failed?: string) => {
+          if (finished) return;
+          finished = true;
           words.current.stop();
+          const was = stateRef.current === "speaking";
+          stateRef.current = "idle";
           setState((s) => (s === "speaking" ? "idle" : s));
+          if (failed) setError(failed);
+          else if (was) emit({ type: "tts_ended" });
           resolve();
         };
-        u.onend = done;
-        u.onerror = done;
+        u.onend = () => done();
+        u.onerror = (ev) => {
+          const err = (ev as SpeechSynthesisErrorEvent).error;
+          done(err === "interrupted" || err === "canceled" ? undefined : `Falha na síntese de voz (${err ?? "desconhecida"}).`);
+        };
         window.speechSynthesis.speak(u);
       }),
-    [settings],
+    [settings, emit, setError],
   );
 
   const speak = useCallback(
@@ -124,26 +156,39 @@ export function useVoice(settings: VoiceSettings | null) {
           ttsMeter.current = AudioMeter.fromElement(audio);
           setTtsSource("piper");
           await new Promise<void>((resolve) => {
-            const done = () => {
+            let finished = false;
+            const done = (failed?: string) => {
+              if (finished) return;
+              finished = true;
               URL.revokeObjectURL(url);
               cleanupTts();
+              const was = stateRef.current === "speaking";
+              stateRef.current = "idle";
               setState((s) => (s === "speaking" ? "idle" : s));
+              if (failed) setError(failed);
+              else if (was) emit({ type: "tts_ended" });
               resolve();
             };
-            audio.onplaying = () => setState("speaking");
-            audio.onended = done;
-            audio.onpause = done;
-            audio.onerror = done;
-            audio.play().catch(done);
+            // "playing" = o áudio REALMENTE começou a tocar → SPEAKING
+            audio.onplaying = () => {
+              if (stateRef.current === "speaking") return;
+              stateRef.current = "speaking";
+              setState("speaking");
+              emit({ type: "tts_started", engine: "piper" });
+            };
+            audio.onended = () => done();
+            audio.onpause = () => done();
+            audio.onerror = () => done("Falha ao reproduzir o áudio da resposta.");
+            audio.play().catch((err: Error) => done(`O navegador bloqueou a reprodução do áudio (${err.name}).`));
           });
           return;
         } catch (e) {
-          if (engine === "piper") setError(`Piper indisponível (${(e as Error).message}); usando a voz do navegador.`);
+          if (engine === "piper") setErrorState(`Piper indisponível (${(e as Error).message}); usando a voz do navegador.`);
         }
       }
       await speakBrowser(clean);
     },
-    [settings, stopSpeaking, speakBrowser, cleanupTts],
+    [settings, stopSpeaking, speakBrowser, cleanupTts, emit, setError],
   );
 
   const stopListening = useCallback(async (deferIdle = false): Promise<string | null> => {
@@ -158,7 +203,9 @@ export function useVoice(settings: VoiceSettings | null) {
     recRef.current = null;
     micMeter.current?.disconnect();
     micMeter.current = null;
+    stateRef.current = "transcribing";
     setState("transcribing");
+    emit({ type: "transcribing" });
     try {
       const blob = new Blob(chunks.current, { type: rec.mimeType || "audio/webm" });
       const form = new FormData();
@@ -170,17 +217,18 @@ export function useVoice(settings: VoiceSettings | null) {
         setError("Não entendi o áudio. Tente de novo, falando mais perto do microfone.");
         return null;
       }
+      emit({ type: "transcribed", text: res.text });
       return res.text;
     } catch (e) {
-      setError((e as Error).message);
+      setError(`Falha na transcrição: ${(e as Error).message}`);
       setState("error");
       return null;
     }
-  }, []);
+  }, [emit, setError]);
 
   const startListening = useCallback(
     async (opts: ListenOptions = {}) => {
-      setError(null);
+      setErrorState(null);
       stopSpeaking();
       await unlockAudio();
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
@@ -196,7 +244,10 @@ export function useVoice(settings: VoiceSettings | null) {
         rec.start(250);
         recRef.current = rec;
         micMeter.current = AudioMeter.fromStream(stream);
+        stateRef.current = "listening";
         setState("listening");
+        // o microfone está realmente captando → LISTENING
+        emit({ type: "mic_started" });
         if (opts.onUtterance && micMeter.current) {
           // Detecção de fim de fala pela energia real do microfone.
           const started = performance.now();
@@ -224,7 +275,9 @@ export function useVoice(settings: VoiceSettings | null) {
                 recRef.current = null;
                 micMeter.current?.disconnect();
                 micMeter.current = null;
+                stateRef.current = "idle";
                 setState("idle");
+                emit({ type: "mic_stopped" });
                 opts.onUtterance?.(null);
                 return;
               }
@@ -240,7 +293,7 @@ export function useVoice(settings: VoiceSettings | null) {
         setState("error");
       }
     },
-    [stopSpeaking, stopListening],
+    [stopSpeaking, stopListening, emit, setError],
   );
 
   const cancelListening = useCallback(() => {
@@ -255,8 +308,10 @@ export function useVoice(settings: VoiceSettings | null) {
     recRef.current = null;
     micMeter.current?.disconnect();
     micMeter.current = null;
+    const was = stateRef.current === "listening";
     setState((s) => (s === "listening" ? "idle" : s));
-  }, []);
+    if (was) emit({ type: "mic_stopped" });
+  }, [emit]);
 
   useEffect(() => () => {
     stopSpeaking();

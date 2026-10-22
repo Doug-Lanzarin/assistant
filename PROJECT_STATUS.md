@@ -4,7 +4,7 @@
 > Branch: `claude/jarvis-v1`.
 
 ## Resumo
-O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 158 testes de backend, 19 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
+O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 158 testes de backend, 27 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
 
 ## Etapas
 | Etapa | Situação | Observações |
@@ -21,11 +21,11 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 | 10. Estabilização | ✅ | backup/restauração, diagnóstico, autostart, recuperação de falhas, documentação, relatórios |
 
 ## Interface de voz (orb)
-Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Piper e níveis do agente). Validada ponta a ponta com áudio real no Chromium: correlação de 0,99 entre a amplitude da voz e o raio do núcleo. Ver [docs/ORB.md](docs/ORB.md).
+Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Piper e níveis do agente) e **máquina de estados explícita** (OFF, IDLE azul profundo, LISTENING verde-ciano, THINKING violeta, SPEAKING azul elétrico, ERROR vermelho), alimentada só por eventos reais de microfone, processamento e TTS. Validada ponta a ponta com áudio real no Chromium: correlação de 0,99 entre a amplitude da voz e o raio do núcleo. Ver [docs/ORB.md](docs/ORB.md).
 
 ## Testes executados (2026-10-22)
 - `backend`: **158 aprovados** (`python -m pytest -q`), ruff sem pendências.
-- `frontend`: **10 aprovados** (`npm test`), `tsc` estrito e build ok.
+- `frontend`: **27 aprovados** (`npm test`), `tsc` estrito e build ok.
 - E2E: painel real no Chromium (todas as telas, desktop e celular), supervisor (instância única, reinício controlado, `kill -9` → recuperação, parada limpa), agente real via WebSocket.
 - Voz: Piper → faster-whisper (tiny/base/small) e custo do openWakeWord.
 - IA local real (llama.cpp + Qwen2.5-1.5B): chamadas de ferramenta reais; 3 defeitos encontrados e corrigidos (formato de mensagem, ações duplicadas, edições sem confirmação).

@@ -17,7 +17,7 @@ export function mockBackend(routes: Record<string, unknown | Handler>) {
     });
     if (!key) return new Response(JSON.stringify({ detail: `rota não simulada: ${method} ${path}` }), { status: 404, headers: { "content-type": "application/json" } });
     let value = routes[key];
-    if (typeof value === "function") value = (value as Handler)(url, init);
+    if (typeof value === "function") value = await (value as Handler)(url, init);
     if (value instanceof Response) return value;
     return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
   });

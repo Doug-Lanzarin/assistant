@@ -193,11 +193,22 @@ dialog::backdrop { background: #02060fcc; }
   box-shadow: 0 0 24px rgba(0, 180, 255, 0.12), inset 0 0 12px rgba(0, 200, 255, 0.06);
 }
 .orb-chip { display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px; font-size: 13px; letter-spacing: .5px; }
-.orb-dot { width: 8px; height: 8px; border-radius: 50%; background: #5ff4ff; box-shadow: 0 0 10px #5ff4ff; transition: background .4s, box-shadow .4s; }
-.orb-dot.off { background: #345; box-shadow: none; }
-.orb-dot.listening { background: #6dffc8; box-shadow: 0 0 12px #6dffc8; }
-.orb-dot.thinking { background: #9ad8ff; animation: orb-blink 0.9s ease-in-out infinite; }
-.orb-dot.error { background: #ffb347; box-shadow: 0 0 12px #ffb347; }
+.orb-dot { width: 8px; height: 8px; border-radius: 50%; background: #3f6fe0; box-shadow: 0 0 8px #3f6fe0; transition: background .45s, box-shadow .45s; }
+.orb-dot.off { background: #2a3a55; box-shadow: none; }
+.orb-dot.idle { background: #3f6fe0; box-shadow: 0 0 8px #3f6fe0aa; }
+.orb-dot.listening { background: #2fffd0; box-shadow: 0 0 12px #2fffd0; }
+.orb-dot.thinking { background: #a66bff; box-shadow: 0 0 12px #a66bff; animation: orb-blink 0.9s ease-in-out infinite; }
+.orb-dot.speaking { background: #3fd8ff; box-shadow: 0 0 14px #1e90ff; }
+.orb-dot.error { background: #ff3b4a; box-shadow: 0 0 14px #ff3b4a; }
+/* bordas dos controles acompanham a cor do estado */
+.orb-stage { --orb-accent: 90, 150, 255; }
+.orb-stage.state-listening { --orb-accent: 47, 255, 208; }
+.orb-stage.state-thinking { --orb-accent: 166, 107, 255; }
+.orb-stage.state-speaking { --orb-accent: 63, 216, 255; }
+.orb-stage.state-error { --orb-accent: 255, 59, 74; }
+.orb-stage .orb-chip, .orb-stage .orb-btn { border-color: rgba(var(--orb-accent), .32); box-shadow: 0 0 24px rgba(var(--orb-accent), .12), inset 0 0 12px rgba(var(--orb-accent), .06); transition: border-color .45s, box-shadow .45s, transform .2s, opacity .3s; }
+.orb-stage .orb-brand { color: rgb(var(--orb-accent)); text-shadow: 0 0 12px rgba(var(--orb-accent), .55); transition: color .45s; }
+.orb-error { color: #ff9aa3 !important; }
 @keyframes orb-blink { 50% { opacity: .35; } }
 
 .orb-caption {
@@ -209,7 +220,7 @@ dialog::backdrop { background: #02060fcc; }
 .orb-reply { color: #e8fbff; font-size: 18px; line-height: 1.45; text-shadow: 0 0 18px rgba(0, 190, 255, .35); white-space: pre-wrap; }
 .orb-hint { color: #6f97ad; font-size: 14px; }
 .orb-hint kbd { border: 1px solid #2c5a77; border-radius: 4px; padding: 0 5px; font-size: 12px; color: #a9e9ff; }
-.orb-error { color: #ffcc8a; font-size: 14px; }
+.orb-error { font-size: 14px; }
 .orb-source { color: #3f7d9a; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; }
 @keyframes orb-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
@@ -226,7 +237,7 @@ dialog::backdrop { background: #02060fcc; }
 .orb-btn:disabled { opacity: .35; cursor: default; }
 .orb-btn.small { padding: 6px 14px; }
 .orb-mic { width: 68px; height: 68px; padding: 0; justify-content: center; }
-.orb-mic.on { border-color: #6dffc8; color: #6dffc8; box-shadow: 0 0 34px rgba(80, 255, 200, .35); }
+.orb-mic.on { border-color: #2fffd0 !important; color: #2fffd0; box-shadow: 0 0 34px rgba(47, 255, 208, .4) !important; }
 .orb-options { position: absolute; left: 50%; bottom: 28px; transform: translateX(-50%); display: flex; gap: 18px; font-size: 12px; color: #5f8ba3; white-space: nowrap; }
 .orb-toggle { flex-direction: row; align-items: center; gap: 6px; color: #5f8ba3; font-size: 12px; }
 .orb-link { background: none; border: 0; color: #6fd8ff; font: inherit; cursor: pointer; text-decoration: underline; padding: 0; }

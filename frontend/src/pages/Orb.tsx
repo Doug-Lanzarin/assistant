@@ -1,20 +1,21 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { PendingActions } from "../components/PendingActions";
 import { useEvents } from "../hooks/useApi";
-import { useVoice, type VoiceSettings } from "../hooks/useVoice";
+import { useVoice, type VoiceEvent, type VoiceSettings } from "../hooks/useVoice";
 import { BAND_COUNT, silentFrame, unlockAudio, type AudioFrame } from "../orb/audio";
-import type { OrbState } from "../orb/engine";
 import { OrbCanvas } from "../orb/OrbCanvas";
+import { ERROR_HOLD_MS, type AssistantState } from "../orb/stateMachine";
+import { useAssistantMachine } from "../orb/useAssistantMachine";
 import { api } from "../services/api";
 import type { ChatReply, Pending } from "../types/api";
 
-const LABELS: Record<OrbState, string> = {
-  off: "Sessão de voz encerrada",
-  idle: "Em repouso",
-  listening: "Ouvindo…",
-  thinking: "Processando…",
-  speaking: "Falando…",
-  error: "Algo deu errado",
+const LABELS: Record<AssistantState, string> = {
+  OFF: "Sessão de voz encerrada",
+  IDLE: "Em repouso",
+  LISTENING: "Ouvindo…",
+  THINKING: "Processando…",
+  SPEAKING: "Falando…",
+  ERROR: "Falha",
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -31,81 +32,101 @@ interface AgentLevel {
 }
 
 export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) {
-  const voice = useVoice(voiceSettings);
-  const [active, setActive] = useState(false);
-  const [busy, setBusy] = useState(false); // backend processando (evento WebSocket)
-  const [requesting, setRequesting] = useState(false); // pedido desta tela em andamento
-  // Entre a resposta chegar e o áudio começar (download do TTS) o orb continua "processando".
-  const [preparingSpeech, setPreparingSpeech] = useState(false);
-  const [agentState, setAgentState] = useState<string | null>(null);
-  const [errorFlash, setErrorFlash] = useState(false);
+  const { machine, dispatch, current } = useAssistantMachine();
+  const state = machine.state;
+  const active = state !== "OFF";
   const [heard, setHeard] = useState("");
   const [reply, setReply] = useState("");
+  const [failure, setFailure] = useState<string | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
   const [typing, setTyping] = useState(false);
   const [text, setText] = useState("");
   const [continuous, setContinuous] = useState(false);
   const [muted, setMuted] = useState(false);
   const [cid, setCid] = useState<number | null>(() => Number(sessionStorage.getItem("jarvis.orb.cid")) || null);
-  const agentLevel = useRef<AgentLevel>({ level: 0, at: 0, source: "agent" });
+  const agentLevel = useRef<AgentLevel>({ level: 0, at: 0, source: "mic" });
   const agentBands = useRef(new Float32Array(BAND_COUNT));
-  const activeRef = useRef(active);
-  activeRef.current = active;
+  const requesting = useRef(false); // pedido desta tela em andamento
+
+  // Eventos reais do navegador (microfone/TTS) → máquina de estados.
+  const onVoiceEvent = useCallback((e: VoiceEvent) => {
+    switch (e.type) {
+      case "mic_started": dispatch({ type: "MIC_STARTED", origin: "browser" }); break;
+      case "mic_stopped": dispatch({ type: "MIC_STOPPED" }); break;
+      case "transcribing": dispatch({ type: "PROCESSING_STARTED", what: "transcription" }); break;
+      case "tts_started": dispatch({ type: "TTS_STARTED", origin: "browser" }); break;
+      case "tts_ended": dispatch({ type: "TTS_ENDED" }); break;
+      case "error":
+        setFailure(e.reason);
+        dispatch({ type: "FAILED", reason: e.reason });
+        break;
+      default: break;
+    }
+  }, [dispatch]);
+  const voice = useVoice(voiceSettings, onVoiceEvent);
 
   useEffect(() => {
     if (cid) sessionStorage.setItem("jarvis.orb.cid", String(cid));
   }, [cid]);
 
-  // Eventos do backend: estado do assistente e voz do agente (microfone do PC).
+  // ERROR: pulsos e brilho estável por um tempo, depois volta ao repouso.
+  useEffect(() => {
+    if (state !== "ERROR") return;
+    const t = setTimeout(() => dispatch({ type: "RECOVER" }), ERROR_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [state, machine.since, dispatch]);
+
+  // Eventos do backend: voz do agente (microfone/alto-falante do PC) e pedidos feitos por voz no PC.
   useEvents((ev) => {
-    if (ev.type === "assistant_state") setBusy(ev.data.state === "thinking");
-    if (ev.type === "voice_state") setAgentState(String(ev.data.state ?? "idle"));
+    const m = current.current;
+    if (ev.type === "voice_state") {
+      const st = String(ev.data.state ?? "idle");
+      if (st === "listening") dispatch({ type: "MIC_STARTED", origin: "agent" });
+      else if (st === "transcribing") dispatch({ type: "PROCESSING_STARTED", what: "transcription" });
+      else if (st === "speaking") dispatch({ type: "TTS_STARTED", origin: "agent" });
+      else if (st === "error") {
+        const reason = String(ev.data.error ?? "falha na voz do PC");
+        setFailure(reason);
+        dispatch({ type: "FAILED", reason });
+      } else if (m.origin === "agent" && m.state === "LISTENING") dispatch({ type: "MIC_STOPPED" });
+      else if (m.origin === "agent" && m.state === "SPEAKING") dispatch({ type: "TTS_ENDED" });
+    }
     if (ev.type === "voice_level") {
       agentLevel.current = { level: Number(ev.data.level ?? 0), at: performance.now(), source: String(ev.data.source ?? "mic") };
     }
-    if (ev.type === "voice_transcript") setHeard(String(ev.data.text ?? ""));
+    if (ev.type === "voice_transcript") {
+      setHeard(String(ev.data.text ?? ""));
+      if (!requesting.current) dispatch({ type: "PROCESSING_STARTED", what: "request" });
+    }
     if (ev.type === "voice_reply") {
       setReply(String(ev.data.text ?? ""));
       if (ev.data.conversation_id) setCid(Number(ev.data.conversation_id));
+      // pedido do agente concluído; se ele for falar, voice_state=speaking chega em seguida
+      if (!requesting.current && current.current.state === "THINKING" && current.current.processing === "request") {
+        setTimeout(() => {
+          if (current.current.state === "THINKING" && !requesting.current) dispatch({ type: "PROCESSING_DONE" });
+        }, 1500);
+      }
     }
     if (ev.type === "confirmation_required" && cid && ev.data.conversation_id === cid) {
       api.get<Pending[]>(`/api/actions/pending?conversation_id=${cid}`).then(setPending).catch(() => {});
     }
-  }, ["assistant_state", "voice_state", "voice_level", "voice_transcript", "voice_reply", "confirmation_required"]);
+  }, ["voice_state", "voice_level", "voice_transcript", "voice_reply", "confirmation_required"]);
 
-  const state: OrbState = useMemo(() => {
-    if (!active) return "off";
-    if (errorFlash || voice.state === "error") return "error";
-    if (voice.state === "listening" || agentState === "listening") return "listening";
-    if (voice.state === "speaking" || agentState === "speaking") return "speaking";
-    if (busy || requesting || preparingSpeech || voice.state === "transcribing" || agentState === "transcribing") return "thinking";
-    return "idle";
-  }, [active, errorFlash, voice.state, agentState, busy, requesting, preparingSpeech]);
-
-  useEffect(() => {
-    if (voice.state === "speaking" || voice.state === "error") setPreparingSpeech(false);
-  }, [voice.state]);
-
-  useEffect(() => {
-    if (!errorFlash) return;
-    const t = setTimeout(() => setErrorFlash(false), 1800);
-    return () => clearTimeout(t);
-  }, [errorFlash]);
-
+  /** Áudio REAL que corresponde ao estado: microfone em LISTENING, TTS em SPEAKING. */
   const readAudio = useCallback((): AudioFrame => {
-    const local = voice.readAudio();
-    if (local.source !== "none") return local;
+    const m = current.current;
+    if (m.state !== "LISTENING" && m.state !== "SPEAKING") return silentFrame();
+    if (m.origin === "browser") return voice.readAudio();
     const a = agentLevel.current;
-    const age = performance.now() - a.at;
-    if (age < 400) {
-      // O agente envia o nível medido no PC; as faixas seguem esse nível.
-      const lvl = a.level;
+    const wanted = m.state === "LISTENING" ? "mic" : "tts";
+    if (a.source === wanted && performance.now() - a.at < 400) {
       const bands = agentBands.current;
-      for (let i = 0; i < BAND_COUNT; i++) bands[i] = lvl * (0.55 + 0.45 * Math.cos((i / BAND_COUNT) * Math.PI));
-      return { level: lvl, bands, source: "agent" };
+      for (let i = 0; i < BAND_COUNT; i++) bands[i] = a.level * (0.55 + 0.45 * Math.cos((i / BAND_COUNT) * Math.PI));
+      return { level: a.level, bands, source: "agent" };
     }
     return silentFrame();
-  }, [voice]);
+  }, [voice, current]);
 
   const send = useCallback(
     async (msg: string, origin: "user" | "voice") => {
@@ -113,32 +134,31 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
       if (!t) return;
       setHeard(t);
       setReply("");
-      setRequesting(true);
+      setFailure(null);
+      requesting.current = true;
+      dispatch({ type: "PROCESSING_STARTED", what: "request" });
+      let r: ChatReply;
       try {
-        const r = await api.post<ChatReply>("/api/chat", { text: t, conversation_id: cid, origin });
-        setCid(r.conversation_id);
-        setReply(r.text);
-        setPending(r.pending ?? []);
-        if (!muted && activeRef.current) {
-          setPreparingSpeech(true);
-          setRequesting(false);
-          try {
-            await voice.speak(r.text);
-          } finally {
-            setPreparingSpeech(false);
-          }
-        } else {
-          setRequesting(false);
-        }
-        if (continuous && activeRef.current && !(r.pending ?? []).length) listenRef.current();
+        r = await api.post<ChatReply>("/api/chat", { text: t, conversation_id: cid, origin });
       } catch (e) {
-        setRequesting(false);
-        setReply(`⚠ ${(e as Error).message}`);
-        setErrorFlash(true);
+        requesting.current = false;
+        const reason = `Falha no processamento: ${(e as Error).message}`;
+        setReply("");
+        setFailure(reason);
+        dispatch({ type: "FAILED", reason });
+        return;
       }
+      requesting.current = false;
+      setCid(r.conversation_id);
+      setReply(r.text);
+      setPending(r.pending ?? []);
+      // Continua THINKING até o áudio realmente começar (TTS_STARTED).
+      if (!muted && current.current.state !== "OFF") await voice.speak(r.text);
+      if (current.current.state === "THINKING") dispatch({ type: "PROCESSING_DONE" });
+      if (continuous && current.current.state === "IDLE" && !(r.pending ?? []).length) listenRef.current();
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cid, muted, continuous, voice],
+    [cid, muted, continuous, voice, dispatch],
   );
 
   const listen = useCallback(() => {
@@ -156,15 +176,15 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
     if (active) {
       voice.cancelListening();
       voice.stopSpeaking();
-      setActive(false);
+      dispatch({ type: "SESSION_END" });
     } else {
-      setActive(true);
+      dispatch({ type: "SESSION_START" });
     }
   }
 
   async function micButton() {
     await unlockAudio();
-    if (!active) setActive(true);
+    if (!active) dispatch({ type: "SESSION_START" });
     if (voice.state === "listening") {
       const said = await voice.stopListening(true);
       if (said) void send(said, "voice");
@@ -180,7 +200,8 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
   async function stopAll() {
     voice.cancelListening();
     voice.stopSpeaking();
-    if (busy || requesting) await api.post(`/api/chat/cancel${cid ? `?conversation_id=${cid}` : ""}`).catch(() => {});
+    dispatch({ type: "CANCEL" });
+    if (requesting.current) await api.post(`/api/chat/cancel${cid ? `?conversation_id=${cid}` : ""}`).catch(() => {});
   }
 
   // Atalhos: Espaço = falar/parar, Esc = interromper tudo
@@ -206,24 +227,25 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
   async function submitText(e: FormEvent) {
     e.preventDefault();
     await unlockAudio();
-    if (!active) setActive(true);
+    if (!active) dispatch({ type: "SESSION_START" });
     const t = text;
     setText("");
     await send(t, "user");
   }
 
-  const frameSource = state === "listening" || state === "speaking"
-    ? (voice.state === "listening" ? "mic" : voice.state === "speaking" ? (voice.ttsSource === "piper" ? "tts" : "words") : "agent")
+  const frameSource = state === "LISTENING" || state === "SPEAKING"
+    ? (machine.origin === "agent" ? "agent" : state === "LISTENING" ? "mic" : voice.ttsSource === "piper" ? "tts" : "words")
     : null;
+  const cls = state.toLowerCase();
 
   return (
-    <div className={`orb-stage state-${state}`}>
+    <div className={`orb-stage state-${cls}`} data-state={state}>
       <OrbCanvas state={state} readAudio={readAudio} label={`Orb do JARVIS: ${LABELS[state]}`} />
 
       <header className="orb-top">
         <span className="orb-brand">J.A.R.V.I.S.</span>
         <span className="orb-chip" aria-live="polite">
-          <span className={`orb-dot ${state}`} aria-hidden="true" /> {LABELS[state]}
+          <span className={`orb-dot ${cls}`} aria-hidden="true" /> {LABELS[state]}
         </span>
       </header>
 
@@ -232,7 +254,7 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
         {reply && <p className="orb-reply">{reply.length > 420 ? `${reply.slice(0, 420)}…` : reply}</p>}
         {!heard && !reply && active && <p className="orb-hint">Pressione <kbd>Espaço</kbd> ou toque no microfone e fale. <kbd>Esc</kbd> interrompe.</p>}
         {!active && <p className="orb-hint">Toque em <strong>Iniciar</strong> para ativar o JARVIS.</p>}
-        {voice.error && <p className="orb-error" role="alert">{voice.error}</p>}
+        {(failure || voice.error) && <p className="orb-error" role="alert">{failure ?? voice.error}</p>}
         {frameSource && <p className="orb-source">sincronia: {SOURCE_LABEL[frameSource]}</p>}
       </div>
 
@@ -250,11 +272,11 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
         <button className="orb-btn" onClick={toggleSession} aria-pressed={active} title={active ? "Encerrar sessão de voz" : "Iniciar sessão de voz"}>
           <span aria-hidden="true">⏻</span><span className="orb-btn-label">{active ? "Encerrar" : "Iniciar"}</span>
         </button>
-        <button className={`orb-btn orb-mic ${state === "listening" ? "on" : ""}`} onClick={micButton}
+        <button className={`orb-btn orb-mic ${state === "LISTENING" ? "on" : ""}`} onClick={micButton}
           aria-label={voice.state === "listening" ? "Parar e enviar" : "Falar com o JARVIS"} disabled={voice.state === "transcribing"}>
           <svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-2.08A7 7 0 0 0 19 12h-2Z" /></svg>
         </button>
-        <button className="orb-btn" onClick={stopAll} title="Interromper (Esc)" disabled={state === "idle" || state === "off"}>
+        <button className="orb-btn" onClick={stopAll} title="Interromper (Esc)" disabled={state === "IDLE" || state === "OFF"}>
           <span aria-hidden="true">■</span><span className="orb-btn-label">Parar</span>
         </button>
       </nav>

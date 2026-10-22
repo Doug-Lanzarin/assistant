@@ -7,7 +7,7 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`).
 | Suíte | Testes | Resultado |
 |---|---|---|
 | Backend (pytest) | 158 | ✅ 158 aprovados |
-| Interface (Vitest + Testing Library + axe-core) | 19 | ✅ 19 aprovados |
+| Interface (Vitest + Testing Library + axe-core) | 27 | ✅ 27 aprovados |
 | Lint (ruff, regras de segurança S/B/BLE) | — | ✅ sem pendências |
 | TypeScript estrito + build de produção | — | ✅ |
 | Sintaxe dos scripts PowerShell (parser do PowerShell 7.4) | 11 scripts | ✅ |
@@ -33,10 +33,10 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`).
 ## Interface
 `frontend/tests/app.test.tsx` (10): primeiro cadastro e login; senha errada; backend fora do ar; painel com estados reais e sem violações graves de acessibilidade (axe); erro com "Tentar novamente"; parada de emergência; conversa com confirmação de ação pendente; erro de rede transparente; clipboard copiar; agente desconectado.
 
-`frontend/tests/orb.test.tsx` (9): conversão RMS→dB, faixas logarítmicas, envelope por palavra, interpolação independente da taxa de quadros, transições suaves entre estados, núcleo acompanha a amplitude real ao falar (correlação positiva), repouso não reage ao áudio, tela do orb (iniciar/encerrar, Espaço, erro de microfone, modo digitação).
+`frontend/tests/orb.test.tsx` (17): **máquina de estados** (fluxo real microfone→transcrição→IA→TTS→repouso; LISTENING só com microfone e SPEAKING só com TTS tocando; eventos ignorados fora do estado; OFF aceita só iniciar; FAILED de qualquer estado ativo com motivo e RECOVER; CANCEL e interrupção da fala); **visual** (cada estado converge para a sua cor; brilho repouso < processando < ouvindo < falando; transição de cor sem saltos; ao falar, núcleo e brilho seguem a amplitude, silêncio não gera ondas e mais volume gera mais ondas; ao ouvir, o núcleo expande com a voz; processando ignora o áudio; erro com exatamente 3 pulsos e depois estável; interpolação independente da taxa de quadros); medição RMS→dB, faixas log e envelope por palavra; **tela** (estado visual = estado da máquina ao iniciar, com falha real do microfone → ERROR → IDLE e encerrar; pedido digitado em THINKING até a resposta; falha do backend → ERROR com o motivo).
 
 ## Testes manuais / ponta a ponta executados
-| **Orb com áudio real** (`scripts/orb_e2e.py`): Chromium com microfone alimentado por frase falada → Whisper local → resposta → Piper | ✅ correlação amplitude×raio 0,99; sequência ouvindo→processando→falando→repouso; sem erros; vídeo em docs/media/orb-demo.mp4 |
+| **Orb com áudio real** (`scripts/orb_e2e.py`): Chromium com microfone alimentado por frase falada → Whisper local → resposta → Piper | ✅ correlação amplitude×raio 0,99; cores medidas por estado; histórico da máquina OFF→IDLE→LISTENING→THINKING→SPEAKING→IDLE; falha simulada (500) → ERROR com 3 pulsos → IDLE; vídeo em docs/media/orb-demo.mp4 |
 | Cenário | Resultado |
 |---|---|
 | Painel real no Chromium (uvicorn + build de produção): login, painel, conversa, segundo cérebro, clipboard, casa, WhatsApp, configurações, permissões, celular (390 px) | ✅ sem erros no console; capturas revisadas |
