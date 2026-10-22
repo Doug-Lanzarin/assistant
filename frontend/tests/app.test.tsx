@@ -30,7 +30,7 @@ describe("Login", () => {
     await userEvent.type(screen.getByLabelText("Senha"), "senha-forte-1");
     await userEvent.type(screen.getByLabelText("Confirmar senha"), "senha-forte-1");
     await userEvent.click(screen.getByRole("button", { name: "Criar acesso" }));
-    expect(await screen.findByRole("heading", { name: "Painel" })).toBeInTheDocument();
+    expect(await screen.findByText("Sessão de voz encerrada")).toBeInTheDocument();
     expect(localStorage.getItem("jarvis.token")).toBe("tok");
     expect(calls.find((c) => c.url === "/api/auth/setup")?.body).toEqual({ username: "doug", password: "senha-forte-1" });
   });

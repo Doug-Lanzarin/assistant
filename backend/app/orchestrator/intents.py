@@ -457,6 +457,7 @@ _ASR_FIXES = [
     (re.compile(r"(?i)\b(a\s?condicionado|aconditionado|ar\s+condicionado|arcondicionado)\b"), "ar-condicionado"),
     (re.compile(r"(?i)^abro\b"), "abra"),
     (re.compile(r"(?i)^mandi\b"), "mande"),
+    (re.compile(r"(?i)\bque\s+(h?oras?|aoras?|ora)\s+s[aã]o\b"), "que horas são"),
     (re.compile(r"(?i)\bgr?a[ul]s\b"), "graus"),
 ]
 

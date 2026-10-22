@@ -7,6 +7,7 @@ import { Clipboard } from "./pages/Clipboard";
 import { Dashboard } from "./pages/Dashboard";
 import { Home } from "./pages/Home";
 import { Login } from "./pages/Login";
+import { Orb } from "./pages/Orb";
 import { Settings } from "./pages/Settings";
 import { WhatsApp } from "./pages/WhatsApp";
 import { api, auth } from "./services/api";
@@ -14,6 +15,7 @@ import { events } from "./services/events";
 import type { Settings as SettingsT } from "./types/api";
 
 const PAGES = [
+  { id: "jarvis", label: "JARVIS", icon: "◉" },
   { id: "dashboard", label: "Painel", icon: "◎" },
   { id: "chat", label: "Conversa", icon: "💬" },
   { id: "brain", label: "Segundo cérebro", icon: "🧠" },
@@ -26,7 +28,7 @@ type PageId = (typeof PAGES)[number]["id"];
 
 function currentPage(): PageId {
   const h = location.hash.replace("#/", "").replace("#", "");
-  return (PAGES.find((p) => p.id === h)?.id ?? "dashboard") as PageId;
+  return (PAGES.find((p) => p.id === h)?.id ?? "jarvis") as PageId;
 }
 
 function Shell({ onLogout }: { onLogout: () => void }) {
@@ -75,7 +77,8 @@ function Shell({ onLogout }: { onLogout: () => void }) {
           <span aria-hidden="true">⏻</span> Sair
         </button>
       </nav>
-      <main className="main" id="conteudo">
+      <main className={`main ${page === "jarvis" ? "orb-mode" : ""}`} id="conteudo">
+        {page === "jarvis" && <Orb voiceSettings={(settings.data?.voice as never) ?? null} />}
         {page === "dashboard" && <Dashboard go={go} />}
         {page === "chat" && <Chat voiceSettings={(settings.data?.voice as never) ?? null} />}
         {page === "brain" && <Brain />}

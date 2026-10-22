@@ -310,3 +310,24 @@ async def test_openai_compat_canonical_tool_messages():
     assert asst == {"role": "assistant", "content": "",
                     "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "task_list", "arguments": "{}"}}]}
     assert bodies[1]["messages"][3] == {"role": "tool", "tool_call_id": "call_1", "content": '{"status":"ok"}'}
+
+
+async def test_agent_voice_levels_relayed_without_history(services):
+    q = services.events.subscribe()
+    before = len(services.events.recent)
+    await services.orchestrator.handle_agent_event("voice.level", {"level": 7, "source": "tts"})
+    await services.orchestrator.handle_agent_event("voice.level", {"level": "x"})
+    ev = q.get_nowait()
+    assert ev == {"type": "voice_level", "ts": ev["ts"], "data": {"level": 1.0, "source": "tts"}}
+    assert q.empty() and len(services.events.recent) == before
+
+
+def test_agent_rms_level():
+    import numpy as np
+
+    from jarvis_agent.voice import VoiceEngine
+
+    assert VoiceEngine.rms_level(np.zeros(1280, dtype=np.int16)) == 0.0
+    loud = (np.sin(np.arange(1280) / 4) * 16000).astype(np.int16)
+    quiet = (loud / 100).astype(np.int16)
+    assert VoiceEngine.rms_level(loud) > 0.9 > VoiceEngine.rms_level(quiet) > 0.0

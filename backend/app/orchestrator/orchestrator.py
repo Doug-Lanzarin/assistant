@@ -432,6 +432,13 @@ class Orchestrator:
     async def handle_agent_event(self, event: str, data: dict) -> None:
         if event == "voice.state":
             await self.s.events.publish("voice_state", data)
+        elif event == "voice.level":
+            try:
+                level = max(0.0, min(1.0, float(data.get("level", 0))))
+            except (TypeError, ValueError):
+                return
+            source = "tts" if data.get("source") == "tts" else "mic"
+            await self.s.events.publish("voice_level", {"level": round(level, 3), "source": source}, record=False)
         elif event == "voice.command":
             text = str(data.get("text", "")).strip()
             if not text:

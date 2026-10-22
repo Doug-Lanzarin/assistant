@@ -6,8 +6,8 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`).
 ## Resumo
 | Suíte | Testes | Resultado |
 |---|---|---|
-| Backend (pytest) | 155 | ✅ 155 aprovados |
-| Interface (Vitest + Testing Library + axe-core) | 10 | ✅ 10 aprovados |
+| Backend (pytest) | 158 | ✅ 158 aprovados |
+| Interface (Vitest + Testing Library + axe-core) | 19 | ✅ 19 aprovados |
 | Lint (ruff, regras de segurança S/B/BLE) | — | ✅ sem pendências |
 | TypeScript estrito + build de produção | — | ✅ |
 | Sintaxe dos scripts PowerShell (parser do PowerShell 7.4) | 11 scripts | ✅ |
@@ -33,7 +33,10 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`).
 ## Interface
 `frontend/tests/app.test.tsx` (10): primeiro cadastro e login; senha errada; backend fora do ar; painel com estados reais e sem violações graves de acessibilidade (axe); erro com "Tentar novamente"; parada de emergência; conversa com confirmação de ação pendente; erro de rede transparente; clipboard copiar; agente desconectado.
 
+`frontend/tests/orb.test.tsx` (9): conversão RMS→dB, faixas logarítmicas, envelope por palavra, interpolação independente da taxa de quadros, transições suaves entre estados, núcleo acompanha a amplitude real ao falar (correlação positiva), repouso não reage ao áudio, tela do orb (iniciar/encerrar, Espaço, erro de microfone, modo digitação).
+
 ## Testes manuais / ponta a ponta executados
+| **Orb com áudio real** (`scripts/orb_e2e.py`): Chromium com microfone alimentado por frase falada → Whisper local → resposta → Piper | ✅ correlação amplitude×raio 0,99; sequência ouvindo→processando→falando→repouso; sem erros; vídeo em docs/media/orb-demo.mp4 |
 | Cenário | Resultado |
 |---|---|
 | Painel real no Chromium (uvicorn + build de produção): login, painel, conversa, segundo cérebro, clipboard, casa, WhatsApp, configurações, permissões, celular (390 px) | ✅ sem erros no console; capturas revisadas |

@@ -23,6 +23,7 @@ backend\.venv\Scripts\python scripts\download_voice_models.py --whisper base
 > `av<16` está fixado: o faster-whisper 1.2 usa um parâmetro removido no PyAV 16 (o erro encontrado e corrigido na validação foi `open() got an unexpected keyword argument 'metadata_errors'`).
 
 ## Uso
+- **Tela JARVIS (orb):** a forma principal de falar com o JARVIS. Veja [ORB.md](ORB.md).
 - **Painel:** clique em 🎤, fale e clique de novo para enviar. A transcrição roda localmente no backend. Marque "responder em voz alta" para ouvir as respostas; o botão "Interromper fala" corta a fala no meio.
 - **Microfone do PC (agente):** Configurações → Voz → "Falar agora", ou o atalho `Ctrl+Alt+J`.
 - **Palavra de ativação:** Configurações → Voz → "Ligar palavra de ativação". Diga **"Hey Jarvis"**, espere o indicador mudar para "ouvindo" e fale o comando.

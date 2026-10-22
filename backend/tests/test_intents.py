@@ -77,6 +77,7 @@ ASR = [
     ("Avis, quais tarefas estão pendentes?", "task_list", {}),
     ("ajuste o ar para 20 e 3 graus", "climate_set", {"temperature": 23.0}),
     ("Jarvis, ajuste o ar para dezoito graus", "climate_set", {"temperature": 18.0}),
+    ("Jarvis, que aora são.", "datetime_now", {}),
 ]
 
 

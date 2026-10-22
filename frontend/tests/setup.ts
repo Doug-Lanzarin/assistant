@@ -17,3 +17,5 @@ HTMLDialogElement.prototype.close ??= function (this: HTMLDialogElement) {
   this.removeAttribute("open");
 };
 Element.prototype.scrollIntoView ??= function () {};
+// jsdom não implementa canvas: o orb detecta e mantém só o estado.
+HTMLCanvasElement.prototype.getContext = (() => null) as unknown as HTMLCanvasElement["getContext"];

@@ -15,9 +15,10 @@ class EventBus:
         self._subscribers: set[asyncio.Queue] = set()
         self.recent: deque[dict[str, Any]] = deque(maxlen=history)
 
-    async def publish(self, kind: str, data: dict[str, Any] | None = None) -> None:
+    async def publish(self, kind: str, data: dict[str, Any] | None = None, record: bool = True) -> None:
         event = {"type": kind, "ts": utcnow(), "data": data or {}}
-        self.recent.append(event)
+        if record:  # eventos de alta frequência (níveis de áudio) não entram no histórico
+            self.recent.append(event)
         for q in list(self._subscribers):
             with contextlib.suppress(asyncio.QueueFull):
                 q.put_nowait(event)

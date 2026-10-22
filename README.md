@@ -2,7 +2,13 @@
 
 JARVIS é um assistente pessoal **local** para Windows. Ele conversa por texto e voz em português, executa ações autorizadas no computador, controla a casa pelo Home Assistant, trabalha com o WhatsApp dentro do que as plataformas permitem e funciona como **segundo cérebro**, com memória de longo prazo, busca semântica, documentos, projetos, grafo de relações e memória da área de transferência.
 
-> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 155 testes de backend e 10 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
+> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 158 testes de backend e 19 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
+
+## Interface
+
+A tela inicial é um **orb holográfico** que reage ao áudio real: aos anéis durante a escuta e ao tamanho do núcleo durante a fala ([docs/ORB.md](docs/ORB.md)). As demais telas cobrem o painel, a conversa, o segundo cérebro, o clipboard, a casa, o WhatsApp e as configurações.
+
+![JARVIS falando](docs/media/orb-falando.png)
 
 ## O que ele faz
 
@@ -77,7 +83,7 @@ data/               banco, logs, backups, modelos (NUNCA versionado)
 
 ## Documentação
 
-- [Arquitetura e fluxos](docs/ARQUITETURA.md)
+- [Arquitetura e fluxos](docs/ARQUITETURA.md) · [Interface de voz (orb)](docs/ORB.md)
 - Guias: [IA](docs/IA.md) · [Voz](docs/VOZ.md) · [Segundo cérebro](docs/SEGUNDO_CEREBRO.md) · [Clipboard](docs/CLIPBOARD.md) · [Home Assistant](docs/HOME_ASSISTANT.md) · [Alexa](docs/ALEXA.md) · [Ar-condicionado TCL](docs/TCL.md) · [WhatsApp](docs/WHATSAPP.md)
 - [Segurança e privacidade](docs/SEGURANCA.md) · [Backup e restauração](docs/BACKUP.md)
 - [Relatório de testes](docs/RELATORIO_TESTES.md) · [Relatório de desempenho](docs/RELATORIO_DESEMPENHO.md)
@@ -88,7 +94,7 @@ data/               banco, logs, backups, modelos (NUNCA versionado)
 
 ```bash
 cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q            # 155 testes
+.venv/bin/python -m pytest -q            # 158 testes
 cd ../frontend && npm ci && npm test && npm run build
 python scripts/jarvisctl.py start --dev  # backend com recarga + agente
 cd frontend && npm run dev               # interface em http://127.0.0.1:5173 (proxy para a API)

@@ -92,6 +92,25 @@ class VoiceEngine:
         caps = self.capabilities()
         return caps["microphone"] and caps["stt"]
 
+    def emit_level(self, level: float, source: str) -> None:
+        """Nível de áudio real (0..1) para o orb do painel, no máximo ~25 vezes/s."""
+        now = time.monotonic()
+        if now - getattr(self, "_last_level", 0.0) < 0.04:
+            return
+        self._last_level = now
+        self.emit("voice.level", {"level": round(float(level), 3), "source": source})
+
+    @staticmethod
+    def rms_level(block) -> float:
+        import math
+
+        import numpy as np
+
+        rms = float(np.sqrt(np.mean(np.asarray(block, dtype=np.float32) ** 2))) / 32768.0
+        if rms <= 1e-6:
+            return 0.0
+        return max(0.0, min(1.0, (20 * math.log10(rms) + 60) / 48))
+
     def set_state(self, state: str, **extra: Any) -> None:
         self.state = state
         self.emit("voice.state", {"state": state, **extra})
@@ -141,6 +160,7 @@ class VoiceEngine:
             while time.monotonic() - t0 < max_seconds:
                 block, _ = stream.read(FRAME)
                 block = block[:, 0]
+                self.emit_level(self.rms_level(block), "mic")
                 rms = float(np.sqrt(np.mean(block.astype(np.float32) ** 2)))
                 if noise is None:
                     noise = max(rms, 150.0)
@@ -268,7 +288,8 @@ class VoiceEngine:
             self._speaking.set()
             self.set_state("speaking")
             try:
-                if self.settings.get("tts_engine") == "piper" and self.capabilities()["tts_piper"]:
+                engine = self.settings.get("tts_engine") or "auto"
+                if engine in ("piper", "auto", "browser") and self.capabilities()["tts_piper"] and self._piper_voice_path():
                     self._speak_piper(text)
                 elif _try_import("pyttsx3"):
                     self._speak_sapi(text)
@@ -296,21 +317,24 @@ class VoiceEngine:
             eng = self._tts_engine
             eng.setProperty("rate", int(180 * float(self.settings.get("rate", 1.0))))
             eng.setProperty("volume", float(self.settings.get("volume", 1.0)))
+            if not getattr(self, "_word_cb", False):
+                # SAPI não expõe o áudio: o orb recebe um pulso por palavra.
+                eng.connect("started-word", lambda name, location, length: self.emit_level(0.85, "tts"))
+                self._word_cb = True
             eng.say(text)
             eng.runAndWait()
 
     def _speak_piper(self, text: str) -> None:
         import io
         import wave
-        from pathlib import Path
 
         from piper import PiperVoice, SynthesisConfig
 
         np, sd = self.np, self.sd
-        voices = sorted(Path(self.models_dir or ".").parent.joinpath("piper").glob("*.onnx"))
-        if not voices:
+        path = self._piper_voice_path()
+        if not path:
             raise RuntimeError("Nenhuma voz Piper encontrada")
-        voice = PiperVoice.load(str(voices[0]))
+        voice = PiperVoice.load(str(path))
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
             voice.synthesize_wav(text, wf, syn_config=SynthesisConfig(length_scale=1.0 / float(self.settings.get("rate", 1.0))))
@@ -318,6 +342,22 @@ class VoiceEngine:
         with wave.open(buf, "rb") as wf:
             data = np.frombuffer(wf.readframes(wf.getnframes()), dtype=np.int16)
             rate = wf.getframerate()
-        sd.play((data * float(self.settings.get("volume", 1.0))).astype(np.int16), rate,
-                device=self.settings.get("output_device"))
+        pcm = (data * float(self.settings.get("volume", 1.0))).astype(np.int16)
+        sd.play(pcm, rate, device=self.settings.get("output_device"))
+        # Envia ao painel a amplitude REAL do trecho que está tocando (janelas de 40 ms).
+        win = max(1, int(rate * 0.04))
+        t0 = time.monotonic()
+        while self._speaking.is_set():
+            pos = int((time.monotonic() - t0) * rate)
+            if pos >= len(pcm):
+                break
+            self.emit_level(self.rms_level(pcm[pos:pos + win]), "tts")
+            time.sleep(0.04)
         sd.wait()
+        self.emit_level(0.0, "tts")
+
+    def _piper_voice_path(self):
+        from pathlib import Path
+
+        voices = sorted(Path(self.models_dir or ".").parent.joinpath("piper").glob("*.onnx"))
+        return voices[0] if voices else None

@@ -12,7 +12,7 @@ const ENUMS: Record<string, string[]> = {
   "ai.remote_provider": ["anthropic", "openai_compat"],
   "ai.remote_effort": ["low", "medium", "high", "xhigh", "max"],
   "ai.embedding_provider": ["hash", "ollama"],
-  "voice.tts_engine": ["browser", "sapi", "piper"],
+  "voice.tts_engine": ["auto", "piper", "browser", "sapi"],
   "voice.stt_model": ["tiny", "base", "small"],
   "whatsapp.mode": ["disabled", "notifications", "web", "business"],
 };
