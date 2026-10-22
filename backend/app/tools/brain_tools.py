@@ -349,18 +349,21 @@ def register(reg: ToolRegistry) -> None:
     reg.register(Tool("memory_timeline", "Linha do tempo de atividades num período (ontem, semana passada, mês passado...)",
                       TimelineParams, _timeline, Risk.READ, "memory.read", "memória"))
     reg.register(Tool("memory_set_status", "Confirma, rejeita ou marca como desatualizada uma memória",
-                      StatusParams, _set_status, Risk.REVERSIBLE, "memory.write", "memória"))
+                      StatusParams, _set_status, Risk.REVERSIBLE, "memory.write", "memória", confirm_if_llm=True,
+                      summarize=lambda a: f"A IA quer marcar a memória #{a.memory_id} como '{a.status}'"))
     reg.register(Tool("graph_related", "Mostra entidades e itens relacionados a um tema no grafo de conhecimento",
                       RelatedParams, _graph_related, Risk.READ, "memory.read", "memória"))
     reg.register(Tool("graph_query", "Consulta o grafo: ex. quais projetos utilizam uma tecnologia",
                       GraphQueryParams, _graph_query, Risk.READ, "memory.read", "memória"))
     reg.register(Tool("graph_relate", "Registra uma relação no grafo (ex.: projeto JARVIS utiliza Python)",
-                      RelateParams, _graph_relate, Risk.REVERSIBLE, "memory.write", "memória"))
+                      RelateParams, _graph_relate, Risk.REVERSIBLE, "memory.write", "memória", confirm_if_llm=True,
+                      summarize=lambda a: f"Registrar relação: {a.src} → {a.rel.replace('_', ' ')} → {a.dst}"))
     reg.register(Tool("task_create", "Cria uma tarefa (opcionalmente com projeto e prazo)", TaskCreateParams, _task_create,
                       Risk.REVERSIBLE, "tasks.write", "tarefas"))
     reg.register(Tool("task_list", "Lista tarefas pendentes e lembretes", TaskListParams, _task_list, Risk.READ, "tasks.read", "tarefas"))
     reg.register(Tool("task_complete", "Marca uma tarefa como concluída", TaskDoneParams, _task_complete, Risk.REVERSIBLE,
-                      "tasks.write", "tarefas"))
+                      "tasks.write", "tarefas", confirm_if_llm=True,
+                      summarize=lambda a: f"Marcar como concluída a tarefa {a.task_id or a.query}"))
     reg.register(Tool("reminder_create", "Cria um lembrete a partir de texto com data/hora em português",
                       ReminderParams, _reminder_create, Risk.REVERSIBLE, "tasks.write", "tarefas"))
     reg.register(Tool("reminder_list", "Lista lembretes agendados", NoParams, _reminder_list, Risk.READ, "tasks.read", "tarefas"))

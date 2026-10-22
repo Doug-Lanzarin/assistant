@@ -44,6 +44,7 @@ CASES = [
     ("que horas são?", "datetime_now", {}),
     ("parar tudo", "emergency_stop", {}),
     ("retomar operações", "emergency_resume", {}),
+    ("Crie uma tarefa chamada revisar documentação do JARVIS, por favor.", "task_create", {"title": "revisar documentação do JARVIS"}),
     ("Jarvis, abra meu projeto de APIs", "open_target", {"target": "projeto de APIs"}),
 ]
 

@@ -2,7 +2,7 @@
 
 JARVIS é um assistente pessoal **local** para Windows. Ele conversa por texto e voz em português, executa ações autorizadas no computador, controla a casa pelo Home Assistant, trabalha com o WhatsApp dentro do que as plataformas permitem e funciona como **segundo cérebro**, com memória de longo prazo, busca semântica, documentos, projetos, grafo de relações e memória da área de transferência.
 
-> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 151 testes de backend e 10 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
+> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 155 testes de backend e 10 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
 
 ## O que ele faz
 
@@ -88,7 +88,7 @@ data/               banco, logs, backups, modelos (NUNCA versionado)
 
 ```bash
 cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q            # 151 testes
+.venv/bin/python -m pytest -q            # 155 testes
 cd ../frontend && npm ci && npm test && npm run build
 python scripts/jarvisctl.py start --dev  # backend com recarga + agente
 cd frontend && npm run dev               # interface em http://127.0.0.1:5173 (proxy para a API)

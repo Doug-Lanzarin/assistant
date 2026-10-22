@@ -309,7 +309,7 @@ def _task_list(o: str, t: str) -> Intent | None:
 
 @rule
 def _task_create(o: str, t: str) -> Intent | None:
-    m = re.match(r"^(?:crie|cria|adicione|adiciona|nova)\s+(?:uma )?tarefa\s*(?:para|de|:)?\s*(?P<body>.+)$", t)
+    m = re.match(r"^(?:crie|cria|adicione|adiciona|nova)\s+(?:uma )?tarefa\s*(?:chamada|com o nome|com o titulo|para|de|:)?\s*(?P<body>.+)$", t)
     if not m:
         return None
     body_o, body_t = o[m.start("body"):], t[m.start("body"):]

@@ -215,12 +215,13 @@ def register(reg: ToolRegistry) -> None:
                       RefParams, _copy, Risk.REVERSIBLE, "clipboard.write", "clipboard", timeout=15))
     reg.register(Tool("clipboard_update_from_clipboard", "Substitui o conteúdo de um registro salvo pelo que está no clipboard agora",
                       RefParams, _update, Risk.REVERSIBLE, "clipboard.save", "clipboard", timeout=15, prepare=_prepare_ref,
-                      summarize=_ref_summary("Substituir o conteúdo de")))
+                      summarize=_ref_summary("Substituir o conteúdo de"), confirm_if_llm=True))
     reg.register(Tool("clipboard_rename", "Renomeia um registro salvo do clipboard", RenameParams, _rename, Risk.REVERSIBLE,
                       "clipboard.save", "clipboard", prepare=_prepare_ref,
-                      summarize=lambda a: f"Renomear #{a.item_id} “{a.query}” para “{a.new_title}”"))
+                      summarize=lambda a: f"Renomear #{a.item_id} “{a.query}” para “{a.new_title}”", confirm_if_llm=True))
     reg.register(Tool("clipboard_update_meta", "Altera categoria, projeto, etiquetas ou fixação de um registro salvo",
-                      MetaParams, _meta, Risk.REVERSIBLE, "clipboard.save", "clipboard", prepare=_prepare_ref))
+                      MetaParams, _meta, Risk.REVERSIBLE, "clipboard.save", "clipboard", prepare=_prepare_ref, confirm_if_llm=True,
+                      summarize=_ref_summary("Alterar categoria/projeto/etiquetas de")))
     reg.register(Tool("clipboard_delete", "Apaga definitivamente um registro salvo do clipboard", RefParams, _delete,
                       Risk.CRITICAL, "clipboard.delete", "clipboard", prepare=_prepare_ref,
                       summarize=_ref_summary("Apagar definitivamente")))

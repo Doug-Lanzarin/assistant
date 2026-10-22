@@ -36,6 +36,8 @@ Recursos usados: chamada de ferramentas (tool use) com o registro do JARVIS, fal
    ```
 3. **Configurações → IA**: `local_model = qwen2.5:3b`, `local_url = http://127.0.0.1:11434`.
 
+Validado neste ambiente com llama.cpp server + Qwen2.5-1.5B (mesma API): chamadas de ferramenta reais funcionaram, mas modelos de 1,5B escolhem ferramentas de forma pouco confiável; prefira 3B ou mais.
+
 Expectativa em i5 sem GPU: modelos de 3B parâmetros geram aproximadamente 8 a 15 tokens/s, ou seja, de 3 a 10 s por resposta curta. Modelos de 7B ficam de 2 a 3 vezes mais lentos. Não carregue modelos maiores que 7B com 16 GB de RAM. **Estes números são estimativas, não foram medidos no seu hardware**; registre os reais com `scripts\benchmark.py` depois de instalar.
 
 ### Embeddings semânticos locais

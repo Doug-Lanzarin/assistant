@@ -75,16 +75,24 @@ class OpenAICompatProvider:
         data = r.json()
         choice = (data.get("choices") or [{}])[0]
         msg = choice.get("message") or {}
-        state.messages.append({k: v for k, v in msg.items() if k in ("role", "content", "tool_calls")} | {"role": "assistant"})
         calls = []
-        for tc in msg.get("tool_calls") or []:
+        canonical_calls = []
+        for i, tc in enumerate(msg.get("tool_calls") or []):
             fn = tc.get("function") or {}
             raw = fn.get("arguments") or "{}"
             try:
                 args = json.loads(raw) if isinstance(raw, str) else dict(raw)
             except ValueError:
                 args = {"__invalid_json__": raw}
-            calls.append(ToolCall(tc.get("id") or fn.get("name", "call"), fn.get("name", ""), args))
+            cid = tc.get("id") or f"call_{len(state.messages)}_{i}"
+            calls.append(ToolCall(cid, fn.get("name", ""), args))
+            canonical_calls.append({"id": cid, "type": "function", "function": {
+                "name": fn.get("name", ""), "arguments": raw if isinstance(raw, str) else json.dumps(raw)}})
+        # Reenvia a mensagem no formato canônico (alguns servidores rejeitam content=null ou campos extras).
+        assistant: dict[str, Any] = {"role": "assistant", "content": msg.get("content") or ""}
+        if canonical_calls:
+            assistant["tool_calls"] = canonical_calls
+        state.messages.append(assistant)
         usage = data.get("usage") or {}
         return LLMResponse(
             text=(msg.get("content") or "").strip(),

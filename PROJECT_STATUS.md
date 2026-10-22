@@ -4,7 +4,7 @@
 > Branch: `claude/jarvis-v1`.
 
 ## Resumo
-O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 151 testes de backend, 10 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
+O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 155 testes de backend, 10 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
 
 ## Etapas
 | Etapa | Situação | Observações |
@@ -21,10 +21,11 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 | 10. Estabilização | ✅ | backup/restauração, diagnóstico, autostart, recuperação de falhas, documentação, relatórios |
 
 ## Testes executados (2026-10-22)
-- `backend`: **151 aprovados** (`python -m pytest -q`), ruff sem pendências.
+- `backend`: **155 aprovados** (`python -m pytest -q`), ruff sem pendências.
 - `frontend`: **10 aprovados** (`npm test`), `tsc` estrito e build ok.
 - E2E: painel real no Chromium (todas as telas, desktop e celular), supervisor (instância única, reinício controlado, `kill -9` → recuperação, parada limpa), agente real via WebSocket.
 - Voz: Piper → faster-whisper (tiny/base/small) e custo do openWakeWord.
+- IA local real (llama.cpp + Qwen2.5-1.5B): chamadas de ferramenta reais; 3 defeitos encontrados e corrigidos (formato de mensagem, ações duplicadas, edições sem confirmação).
 - Detalhes: [docs/RELATORIO_TESTES.md](docs/RELATORIO_TESTES.md), [docs/RELATORIO_DESEMPENHO.md](docs/RELATORIO_DESEMPENHO.md).
 
 ## Erros conhecidos / riscos
@@ -32,7 +33,7 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 - O `openwakeword>=0.6` não instala em Python 3.13 no Linux (dependência `tflite-runtime`); com 0.4 funciona. No Windows, recomenda-se Python 3.12.
 - A API `UserNotificationListener` pode negar acesso a apps Python não empacotados (MSIX) em algumas versões do Windows.
 - Os seletores do WhatsApp Web podem quebrar com mudanças no site (ficam em `config/whatsapp_selectors.json`).
-- Não foi possível validar um LLM local real aqui: o download do Ollama foi bloqueado pelo proxy desta sessão (GitHub de terceiros).
+- O Ollama não pôde ser baixado aqui (proxy bloqueou o GitHub de terceiros); o caminho de IA local foi validado com **llama.cpp server** (mesma API compatível com OpenAI) e Qwen2.5-1.5B. Modelos de 1,5B escolhem ferramentas mal: use ≥3B (`qwen2.5:3b`) no dia a dia.
 
 ## Dependências externas (pendentes)
 1. **Windows 11 + i5 + 16 GB:** rodar `scripts\install.ps1 -Voice` e a lista de verificação em [docs/FUNCIONALIDADES.md](docs/FUNCIONALIDADES.md#lista-de-verificação-no-seu-windows).

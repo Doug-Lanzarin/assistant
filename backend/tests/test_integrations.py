@@ -282,3 +282,31 @@ async def test_open_target_allowlist(services, desktop):
     assert "não está na lista" in r["text"]
     out = await services.executor.run("open_target", {"target": "javascript:alert(1)"}, ToolContext(services))
     assert out.status == "error"
+
+
+async def test_openai_compat_canonical_tool_messages():
+    """Regressão (achado com llama.cpp real): mensagem do assistente deve ser reenviada no formato canônico."""
+    from app.providers.openai_compat import OpenAICompatProvider
+
+    bodies = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        bodies.append(body)
+        if len(bodies) == 1:
+            return httpx.Response(200, json={"choices": [{"finish_reason": "tool_calls", "message": {
+                "role": "assistant", "content": None, "function_call": None,
+                "tool_calls": [{"id": "call_1", "function": {"name": "task_list", "arguments": "{}"}}]}}]})
+        return httpx.Response(200, json={"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "ok"}}]})
+
+    p = OpenAICompatProvider("t", "http://x/v1", "m", transport=httpx.MockTransport(handler))
+    st = p.start("sys", [], "oi")
+    r1 = await p.step(st, [{"type": "function", "function": {"name": "task_list", "parameters": {}}}])
+    assert r1.tool_calls[0].name == "task_list"
+    p.add_tool_results(st, r1, [("call_1", '{"status":"ok"}', False)])
+    r2 = await p.step(st, None)
+    assert r2.text == "ok"
+    asst = bodies[1]["messages"][2]
+    assert asst == {"role": "assistant", "content": "",
+                    "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "task_list", "arguments": "{}"}}]}
+    assert bodies[1]["messages"][3] == {"role": "tool", "tool_call_id": "call_1", "content": '{"status":"ok"}'}

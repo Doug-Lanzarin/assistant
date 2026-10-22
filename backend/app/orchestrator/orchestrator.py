@@ -322,6 +322,8 @@ class Orchestrator:
             outcomes: list[Outcome] = []
             sources: list[dict] = list(hits)
             tainted = any(h["owner_type"] == "document" for h in hits)
+            executed: dict[tuple[str, str], Outcome] = {}
+            duplicates = 0
             try:
                 final_text = ""
                 for _ in range(cfg["max_tool_iterations"]):
@@ -334,9 +336,19 @@ class Orchestrator:
                         break
                     results = []
                     stop = False
+                    fresh = 0
                     for call in resp.tool_calls:
+                        key = (call.name, json.dumps(call.arguments, sort_keys=True, ensure_ascii=False, default=str))
+                        if key in executed:
+                            # Modelo repetindo a mesma chamada: não executa de novo (evita ações duplicadas).
+                            results.append((call.id, json.dumps({"status": "duplicate", "message":
+                                "Esta ação já foi executada neste pedido. Não repita; responda ao usuário com o resultado."},
+                                ensure_ascii=False), False))
+                            continue
+                        fresh += 1
                         ctx = ToolContext(self.s, cid, "llm", tainted=tainted, state=state)
                         out = await self.s.executor.run(call.name, call.arguments, ctx)
+                        executed[key] = out
                         outcomes.append(out)
                         if out.result:
                             tainted = tainted or out.result.untrusted
@@ -345,6 +357,12 @@ class Orchestrator:
                         if out.status == "needs_confirmation":
                             stop = True
                     provider.add_tool_results(st, resp, results)
+                    if not fresh:
+                        duplicates += 1
+                        if duplicates >= 2:
+                            final_text = (resp.text + "\n\n" if resp.text else "") + "\n".join(
+                                o.message for o in outcomes if o.message)
+                            break
                     if stop:
                         # Não continua o loop: a decisão é do usuário.
                         pend = [o for o in outcomes if o.status == "needs_confirmation"]

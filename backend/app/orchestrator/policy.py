@@ -38,6 +38,8 @@ def decide(tool: Tool, ctx: ToolContext, policy: dict) -> Decision:
     levels = {int(x) for x in policy.get("confirm_risk_levels", [3, 4])}
     levels.add(int(Risk.CRITICAL))
     needs = tool.always_confirm is True or int(tool.risk) in levels
+    if tool.confirm_if_llm and ctx.origin == "llm":
+        needs = True
     if (
         not needs
         and ctx.origin == "llm"

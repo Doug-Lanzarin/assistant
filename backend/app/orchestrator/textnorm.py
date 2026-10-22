@@ -40,5 +40,9 @@ def strip_wake_word(text: str, wake: str = "jarvis") -> str:
     return pat.sub("", text, count=1).strip()
 
 
+_POLITE = re.compile(r"(?i)[\s,]*(por favor|pf|pfv|obrigad[oa])[\s.!?]*$")
+
+
 def clean_tail(text: str) -> str:
+    text = _POLITE.sub("", text.strip())
     return text.strip().strip(" .,!?;:\"'“”").strip()

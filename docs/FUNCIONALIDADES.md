@@ -26,7 +26,7 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 | 19 | WhatsApp opera dentro dos recursos disponíveis | 🧪 Cloud API e WhatsApp Web; 🪟 notificações; 🔌 contas |
 | 20 | Envio exige autorização | ✅ sempre confirma (não configurável) |
 | 21 | Ações reportam resultados verdadeiros | ✅ verificação de estado, releitura do clipboard, evidência de envio |
-| 22 | Testes essenciais passam | ✅ 151 + 10 |
+| 22 | Testes essenciais passam | ✅ 155 + 10 |
 | 23 | Credenciais protegidas | ✅ Fernet + arquivo 0600 (Linux); 🪟 DPAPI |
 | 24 | Backup e restauração funcionam | ✅ |
 | 25 | Consumo de recursos documentado | ✅ neste ambiente; 🪟 rodar `benchmark.py` no i5 |
@@ -56,7 +56,7 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 
 ## Lista de verificação no seu Windows
 1. `scripts\install.ps1 -Voice` termina com "tudo certo" no `doctor`.
-2. `scripts\test.ps1`: 151 + 10 testes passam no Windows.
+2. `scripts\test.ps1`: 155 + 10 testes passam no Windows.
 3. `scripts\start.ps1` abre o painel → crie o usuário.
 4. Painel → cartão JARVIS: "Agente local conectado".
 5. Copie um texto no Bloco de Notas → Conversa: "salve o que copiei como teste" → copie outra coisa → "copie teste" → Ctrl+V no Bloco de Notas mostra o texto original.

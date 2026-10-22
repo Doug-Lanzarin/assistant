@@ -87,6 +87,9 @@ class Tool:
     always_confirm: bool | None = None
     summarize: Callable[[Any], str] | None = None
     expose_to_llm: bool = True
+    # Alterações de dados EXISTENTES do usuário pedidas pela IA exigem confirmação
+    # (a IA pode acrescentar, mas não reescrever/rebaixar sem você ver).
+    confirm_if_llm: bool = False
     # Risco dependente dos argumentos (ex.: fechadura > lâmpada). Nunca reduz o risco base.
     risk_fn: Callable[[ToolContext, Any], Awaitable[Risk]] | None = None
     # Preparação antes da confirmação (ex.: resolver o contato exato a ser mostrado ao usuário).

@@ -196,3 +196,19 @@ async def test_ambiguous_reply_does_not_confirm(services):
     r = await services.orchestrator.handle("não", cid)
     assert "cancelada" in r["text"].lower()
     assert services.brain.get(m["id"])
+
+
+async def test_repeated_tool_calls_are_not_reexecuted(services, scripted):
+    call = ("task_create", {"title": "comprar café"})
+    services.providers.set_override([scripted([call, call, call, call, "pronto"])])
+    r = await services.orchestrator.handle("estou esquecendo tudo, anote como tarefa o café")
+    assert len(services.brain.list_tasks()) == 1, "chamada repetida não pode duplicar a ação"
+    assert "comprar café" in r["text"]
+
+
+async def test_ai_edits_to_existing_data_need_confirmation(services, scripted):
+    m = await services.brain.add("Uso SQLite no JARVIS", "decision")
+    services.providers.set_override([scripted([("memory_set_status", {"memory_id": m["id"], "status": "outdated"}), "ok"])])
+    r = await services.orchestrator.handle("o que você acha da minha escolha de banco de dados?")
+    assert r["actions"][0]["status"] == "needs_confirmation"
+    assert services.brain.get(m["id"])["status"] == "explicit"
