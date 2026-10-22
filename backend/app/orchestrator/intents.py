@@ -218,6 +218,7 @@ def _memory_add(o: str, t: str) -> Intent | None:
     body_o, body_t = o[m.start("body"):], t[m.start("body"):]
     body_o, body_t, project = _split_project(body_o, body_t)
     body = clean_tail(body_o)
+    body = re.sub(r"(?i)^(de|do|da|sobre|para)\s+(?=(um|uma|o|a|criar|fazer)\b)", "", body).strip()
     if not body:
         return None
     if kind == "note" and re.match(r"^(decidi|decidimos|vamos usar|optei)", fold(body)):

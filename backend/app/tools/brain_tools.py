@@ -43,7 +43,10 @@ def _format_hits(hits: list[dict]) -> str:
             flag += " (inferência não confirmada)"
         if h.get("status") == "contradicted":
             flag += " ⚠ contradita"
-        lines.append(f"{i}. {h['title']} — {h['snippet'][:160].strip()} [{h['citation']}]{flag}")
+        snippet = h["snippet"][:160].strip()
+        title = h["title"].strip()
+        text = snippet if snippet.startswith(title[:40]) else f"{title} — {snippet}"
+        lines.append(f"{i}. {text} [{h['citation']}]{flag}")
     return "\n".join(lines)
 
 

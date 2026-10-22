@@ -1,0 +1,127 @@
+import { useCallback, useEffect, useState } from "react";
+import { ToastProvider, useToast } from "./components/Toasts";
+import { useApi, useEvents } from "./hooks/useApi";
+import { Brain } from "./pages/Brain";
+import { Chat } from "./pages/Chat";
+import { Clipboard } from "./pages/Clipboard";
+import { Dashboard } from "./pages/Dashboard";
+import { Home } from "./pages/Home";
+import { Login } from "./pages/Login";
+import { Settings } from "./pages/Settings";
+import { WhatsApp } from "./pages/WhatsApp";
+import { api, auth } from "./services/api";
+import { events } from "./services/events";
+import type { Settings as SettingsT } from "./types/api";
+
+const PAGES = [
+  { id: "dashboard", label: "Painel", icon: "◎" },
+  { id: "chat", label: "Conversa", icon: "💬" },
+  { id: "brain", label: "Segundo cérebro", icon: "🧠" },
+  { id: "clipboard", label: "Clipboard", icon: "📋" },
+  { id: "home", label: "Casa", icon: "🏠" },
+  { id: "whatsapp", label: "WhatsApp", icon: "✉" },
+  { id: "settings", label: "Configurações", icon: "⚙" },
+] as const;
+type PageId = (typeof PAGES)[number]["id"];
+
+function currentPage(): PageId {
+  const h = location.hash.replace("#/", "").replace("#", "");
+  return (PAGES.find((p) => p.id === h)?.id ?? "dashboard") as PageId;
+}
+
+function Shell({ onLogout }: { onLogout: () => void }) {
+  const toast = useToast();
+  const [page, setPage] = useState<PageId>(currentPage);
+  const [busy, setBusy] = useState(false);
+  const settings = useApi<SettingsT>("/api/settings");
+
+  useEffect(() => {
+    const onHash = () => setPage(currentPage());
+    window.addEventListener("hashchange", onHash);
+    events.start();
+    return () => {
+      window.removeEventListener("hashchange", onHash);
+      events.stop();
+    };
+  }, []);
+
+  useEvents((ev) => {
+    if (ev.type === "assistant_state") setBusy(ev.data.state === "thinking");
+    if (ev.type === "reminder") toast(`⏰ Lembrete: ${String(ev.data.text)}`, "info");
+    if (ev.type === "kill_switch") toast(ev.data.active ? "Modo de emergência ativado." : "Operações retomadas.", ev.data.active ? "error" : "ok");
+    if (ev.type === "agent") toast(ev.data.connected ? "Agente local conectado." : "Agente local desconectado.", ev.data.connected ? "ok" : "error");
+    if (ev.type === "consolidation") toast("Consolidação de memórias concluída.", "info");
+  });
+
+  const go = useCallback((p: string) => {
+    location.hash = `#/${p}`;
+  }, []);
+
+  return (
+    <div className="app">
+      <nav className="sidebar" aria-label="Navegação principal">
+        <div className="brand">
+          <div className={`brand-orb ${busy ? "busy" : ""}`} aria-hidden="true" />
+          JARVIS
+        </div>
+        {PAGES.map((p) => (
+          <button key={p.id} className="nav-btn" aria-current={page === p.id ? "page" : undefined} onClick={() => go(p.id)}>
+            <span aria-hidden="true">{p.icon}</span>
+            {p.label}
+          </button>
+        ))}
+        <div className="nav-spacer" />
+        <button className="nav-btn" onClick={onLogout}>
+          <span aria-hidden="true">⏻</span> Sair
+        </button>
+      </nav>
+      <main className="main" id="conteudo">
+        {page === "dashboard" && <Dashboard go={go} />}
+        {page === "chat" && <Chat voiceSettings={(settings.data?.voice as never) ?? null} />}
+        {page === "brain" && <Brain />}
+        {page === "clipboard" && <Clipboard />}
+        {page === "home" && <Home go={go} />}
+        {page === "whatsapp" && <WhatsApp go={go} />}
+        {page === "settings" && <Settings />}
+      </main>
+    </div>
+  );
+}
+
+export default function App() {
+  const [logged, setLogged] = useState<boolean | null>(auth.token ? null : false);
+
+  useEffect(() => {
+    auth.onUnauthorized(() => {
+      auth.set(null);
+      setLogged(false);
+    });
+    if (auth.token) {
+      api
+        .get("/api/auth/me")
+        .then(() => setLogged(true))
+        .catch(() => {
+          auth.set(null);
+          setLogged(false);
+        });
+    }
+  }, []);
+
+  async function logout() {
+    try {
+      await api.post("/api/auth/logout");
+    } catch {
+      /* sessão já inválida */
+    }
+    auth.set(null);
+    setLogged(false);
+  }
+
+  return (
+    <ToastProvider>
+      {logged === null && <p className="muted" style={{ padding: 24 }}>Carregando…</p>}
+      {logged === false && <Login onLogged={() => setLogged(true)} />}
+      {logged === true && <Shell onLogout={logout} />}
+    </ToastProvider>
+  );
+}
