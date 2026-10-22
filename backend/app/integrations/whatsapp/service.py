@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import logging
+import time
 from datetime import UTC, datetime
 from typing import Any
 
@@ -44,6 +45,7 @@ class WhatsAppService:
         self.agent = agent
         self.events = events
         self._transport = transport
+        self._web_status: tuple[float, dict] | None = None  # cache: abrir o WhatsApp Web é lento
 
     @property
     def mode(self) -> str:
@@ -63,12 +65,17 @@ class WhatsAppService:
             if not self.agent.connected:
                 st["detail"] = "Agente local não conectado."
             else:
-                try:
-                    info = await self.agent.call("whatsapp.status", {}, timeout=15)
-                    st.update(can_read=bool(info.get("logged_in")), can_send=bool(info.get("logged_in")),
-                              detail=info.get("detail", ""), web=info)
-                except Exception as e:  # noqa: BLE001
-                    st["detail"] = f"WhatsApp Web indisponível: {e}"
+                cached = self._web_status
+                if cached and time.monotonic() - cached[0] < 60:
+                    info = cached[1]
+                else:
+                    try:
+                        info = await self.agent.call("whatsapp.status", {}, timeout=25)
+                    except Exception as e:  # noqa: BLE001
+                        info = {"logged_in": False, "detail": f"WhatsApp Web indisponível: {e}"}
+                    self._web_status = (time.monotonic(), info)
+                st.update(can_read=bool(info.get("logged_in")), can_send=bool(info.get("logged_in")),
+                          detail=info.get("detail", ""), web=info)
         elif mode == "business":
             cfg = self.settings.get("whatsapp")
             ok = bool(cfg.get("phone_number_id") and self.secrets.get("whatsapp_cloud_token"))

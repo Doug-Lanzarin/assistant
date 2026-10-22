@@ -27,9 +27,10 @@ from app.providers.base import ChatMessage, LLMProvider, ProviderError
 
 log = logging.getLogger("jarvis.orchestrator")
 
-YES = re.compile(r"^(sim|s|pode|pode sim|pode enviar|pode mandar|pode fazer|pode apagar|pode executar|confirmo|confirma|"
-                 r"confirmar|confirmado|ok|ok pode|manda|mande|envia|envie|isso|isso mesmo|claro|faca|faz|execute|"
-                 r"autorizo|autorizado|vai|positivo)[.! ]*$")
+# Somente confirmações explícitas: "ok", "vai", "claro" etc. NÃO confirmam ações.
+YES = re.compile(r"^(sim|sim pode|pode|pode sim|pode enviar|pode mandar|pode fazer|pode apagar|pode executar|confirmo|"
+                 r"confirma|confirmar|confirmado|ok pode|pode ir|manda|mande|envia|envie|isso mesmo|execute|"
+                 r"autorizo|autorizado)[.! ]*$")
 NO = re.compile(r"^(nao|n|cancela|cancele|cancelar|nao envie|nao mande|nao faca|deixa|deixa pra la|esquece|negativo)[.! ]*$")
 ORDINALS = {"primeiro": 0, "primeira": 0, "1": 0, "um": 0, "segundo": 1, "segunda": 1, "2": 1, "dois": 1,
             "terceiro": 2, "terceira": 2, "3": 2, "tres": 2, "quarto": 3, "quarta": 3, "4": 3, "quinto": 4, "5": 4}
@@ -132,7 +133,7 @@ class Orchestrator:
         state = self.s.state_for(cid)
         if reply.get("sources"):
             state["last_sources"] = reply["sources"]
-        asyncio.get_event_loop().create_task(
+        asyncio.get_running_loop().create_task(
             self.s.events.publish("assistant_state", {"state": "idle", "conversation_id": cid})
         )
         return reply

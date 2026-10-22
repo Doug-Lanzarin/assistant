@@ -312,7 +312,8 @@ class Brain:
                     ids = {r["id"] for r in self.db.query(sql, tuple(params))}
                     allowed[ot] = allowed[ot] & ids if ot in allowed else ids
         hits = await self.indexer.search(query, owner_types, allowed or None, limit=limit)
-        return [self._describe_hit(h) for h in hits if self._describe_hit(h)]
+        described = (self._describe_hit(h) for h in hits)
+        return [d for d in described if d]
 
     def _describe_hit(self, h) -> dict | None:
         base = {"owner_type": h.owner_type, "owner_id": h.owner_id, "snippet": h.text[:400],

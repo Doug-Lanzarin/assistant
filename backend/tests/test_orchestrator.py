@@ -183,3 +183,16 @@ async def test_history_persists_across_restart(env, services):
     hits = await s2.brain.search("academia")
     assert hits and hits[0]["kind"] == "idea"
     s2.db.close()
+
+
+async def test_ambiguous_reply_does_not_confirm(services):
+    m = await services.brain.add("algo importante", "note")
+    r = await services.orchestrator.handle(f"esqueça a memória {m['content']}")
+    cid = r["conversation_id"]
+    assert r["pending"]
+    for reply in ("ok", "vai", "claro", "hum"):
+        await services.orchestrator.handle(reply, cid)
+    assert services.brain.get(m["id"]), "respostas ambíguas não confirmam"
+    r = await services.orchestrator.handle("não", cid)
+    assert "cancelada" in r["text"].lower()
+    assert services.brain.get(m["id"])
