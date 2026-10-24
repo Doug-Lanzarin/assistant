@@ -71,6 +71,8 @@ A legenda mostra qual fonte está dirigindo a animação no momento ("sincronia:
 - Confirmações de ações sensíveis aparecem num cartão no canto: responda "sim" por voz ou clique em Confirmar.
 
 ## Desempenho e acessibilidade
+- 60 quadros/s só em LISTENING e SPEAKING (quando a animação segue o áudio); 30 nos demais estados. O fundo de tela inteira fica em cache, e a resolução interna cai sozinha se um quadro passar de ~9 ms. Medido: com o orb aberto num navegador sem aceleração de vídeo, a transcrição local passou de 3,55 s para 2,3 s (antes, a animação disputava a CPU com o Whisper).
+- O menu lateral fica fechado: ☰ no canto abre a gaveta, que fecha ao escolher uma tela, ao clicar fora ou com Esc.
 - Canvas 2D sem bibliotecas: ~70 partículas, 3 anéis de 128 pontos, gradientes. Leve para gráficos integrados. A resolução é limitada a 2× e a animação pausa sozinha com a aba em segundo plano.
 - `prefers-reduced-motion`: partículas desligadas e amplitudes reduzidas.
 - Estados anunciados por `aria-live`; todos os controles são acessíveis pelo teclado.

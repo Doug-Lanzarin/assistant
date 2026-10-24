@@ -18,7 +18,7 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 | 11 | Clipboard salvo por comando | ✅ (despachante real do agente); 🪟 API Win32 |
 | 12 | Conteúdo salvo encontrado por linguagem natural | ✅ |
 | 13 | Conteúdo original copiado de volta | ✅ byte a byte; 🪟 Win32 |
-| 14 | Operação por voz com alternativa textual | ✅ STT/TTS locais medidos; 🪟 microfone; ⚠️ palavra de ativação não comprovada com voz real |
+| 14 | Operação por voz com alternativa textual | ✅ STT/TTS locais medidos (small+beam 5, ~3% de erro em frases curtas; resposta em ~2,5 s); 🪟 microfone; ⚠️ palavra de ativação não comprovada com voz real |
 | 15 | Automação do Windows respeita permissões | ✅ lista de permissões e validações; 🪟 abertura real de apps |
 | 16 | Home Assistant consulta e controla dispositivos reais | 🧪 com verificação de estado; 🔌 HA real |
 | 17 | Alexa implementada ou bloqueada só por dependência externa | 🔌 via HA (Nabu Casa ou skill) + anúncios `notify.*` |
@@ -26,7 +26,7 @@ Legenda: ✅ implementado e testado automaticamente · 🧪 implementado e testa
 | 19 | WhatsApp opera dentro dos recursos disponíveis | 🧪 Cloud API e WhatsApp Web; 🪟 notificações; 🔌 contas |
 | 20 | Envio exige autorização | ✅ sempre confirma (não configurável) |
 | 21 | Ações reportam resultados verdadeiros | ✅ verificação de estado, releitura do clipboard, evidência de envio |
-| 22 | Testes essenciais passam | ✅ 172 + 27 |
+| 22 | Testes essenciais passam | ✅ 217 + 36 |
 | 23 | Credenciais protegidas | ✅ Fernet + arquivo 0600 (Linux); 🪟 DPAPI |
 | 24 | Backup e restauração funcionam | ✅ |
 | 25 | Consumo de recursos documentado | ✅ neste ambiente; 🪟 rodar `benchmark.py` no i5 |

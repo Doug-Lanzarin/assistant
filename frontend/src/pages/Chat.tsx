@@ -73,7 +73,7 @@ export function Chat({ voiceSettings }: { voiceSettings: VoiceSettings | null })
     setBubbles((b) => [...b, { id: `u${Date.now()}`, role: "user", text: msg }]);
     setBusy(true);
     try {
-      const r = await api.post<ChatReply>("/api/chat", { text: msg, conversation_id: cid, origin });
+      const r = await api.post<ChatReply>("/api/chat", { text: msg, conversation_id: cid, origin }, 180_000);
       if (r.conversation_id !== cid) {
         skipLoad.current = true;
         setCid(r.conversation_id);

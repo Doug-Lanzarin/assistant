@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AudioMeter, silentFrame, unlockAudio, WordEnvelope, type AudioFrame } from "../orb/audio";
 import { api, auth } from "../services/api";
+import { toSpeech } from "./speechText";
 
 export type VoiceState = "idle" | "listening" | "transcribing" | "speaking" | "error";
 
@@ -35,9 +36,65 @@ export function speechSupported(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window;
 }
 
-const VAD_SPEECH = 0.42; // nível (0..1) considerado fala
-const VAD_SILENCE = 0.28;
-const SILENCE_MS = 1100;
+// Detecção de fim de fala ADAPTATIVA: os limiares acompanham o ruído do ambiente
+// (o nível é perceptual, 0..1 ≈ −60..−12 dB). Com limiares fixos, um microfone de
+// notebook com ventoinha ao fundo nunca "ficava em silêncio" e esperava 15 s.
+export const VAD = { speechAbove: 0.16, silenceAbove: 0.07, minSpeech: 0.3, minSilence: 0.16, silenceMs: 900, noSpeechMs: 7000 };
+
+/** Limiar de fala/silêncio para um ruído de fundo estimado. */
+export function vadThresholds(floor: number) {
+  return { speech: Math.max(VAD.minSpeech, floor + VAD.speechAbove), silence: Math.max(VAD.minSilence, floor + VAD.silenceAbove) };
+}
+
+const MAX_FLOOR = 0.4; // acima disso é voz, não ambiente (≈ −41 dB)
+
+/** Estado do detector: alimente com o nível a cada ~50 ms. */
+export function createVad(maxSeconds = 12) {
+  let floor = 0.12;
+  let calib = 0; // amostras de calibração (primeiros 300 ms: só ruído de fundo)
+  let calibSum = 0;
+  let started = -1;
+  let heard = false;
+  let speechMs = 0;
+  let peak = 0;
+  let quietSince = 0;
+  let last = 0;
+  return {
+    /** Devolve "speech_end" | "no_speech" | "too_long" | null. */
+    feed(level: number, now: number): "speech_end" | "no_speech" | "too_long" | null {
+      if (started < 0) started = now;
+      const dt = last ? now - last : 50;
+      last = now;
+      if (now - started < 300) {
+        calib += 1;
+        calibSum += level;
+        // Teto: se a pessoa já começa falando, a voz não vira "ruído de fundo".
+        floor = Math.min(MAX_FLOOR, calibSum / calib);
+        return null;
+      }
+      const { speech, silence } = vadThresholds(floor);
+      // Depois de ouvir a voz, "silêncio" também é relativo ao pico dela (ruído alto não segura a gravação).
+      const quietBelow = heard ? Math.max(silence, Math.min(peak * 0.62, speech)) : silence;
+      if (level > speech) {
+        speechMs += dt;
+        if (speechMs > 120) heard = true; // ignora estalos curtos
+        peak = Math.max(peak, level);
+        quietSince = 0;
+      } else {
+        if (!heard) floor = Math.min(MAX_FLOOR, floor * 0.95 + level * 0.05); // continua aprendendo o ruído
+        if (heard && level < quietBelow) quietSince ||= now;
+        else if (level >= quietBelow) quietSince = 0;
+      }
+      if (heard && quietSince && now - quietSince > VAD.silenceMs) return "speech_end";
+      if (now - started > maxSeconds * 1000) return heard ? "too_long" : "no_speech";
+      if (!heard && now - started > VAD.noSpeechMs) return "no_speech";
+      return null;
+    },
+    get floor() {
+      return floor;
+    },
+  };
+}
 
 export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEvent) => void) {
   const [state, setState] = useState<VoiceState>("idle");
@@ -98,7 +155,10 @@ export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEven
         u.volume = Number(settings?.volume ?? 1);
         const voices = window.speechSynthesis.getVoices();
         const wanted = (settings?.tts_voice ?? "").toLowerCase();
-        const v = voices.find((x) => wanted && x.name.toLowerCase().includes(wanted)) ?? voices.find((x) => x.lang?.toLowerCase().startsWith("pt-br"));
+        const ptBR = voices.filter((x) => x.lang?.toLowerCase().replace("_", "-").startsWith("pt-br"));
+        // Sem escolha explícita: a voz pt-BR mais natural disponível (as "Natural" do Edge soam humanas).
+        const v = voices.find((x) => wanted && x.name.toLowerCase().includes(wanted))
+          ?? ptBR.find((x) => /natural/i.test(x.name)) ?? ptBR[0];
         if (v) u.voice = v;
         u.onstart = () => {
           words.current.start();
@@ -134,7 +194,7 @@ export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEven
     async (text: string): Promise<void> => {
       if (!text.trim()) return;
       stopSpeaking();
-      const clean = text.replace(/```[\s\S]*?```/g, " ").replace(/\[[^\]]{0,80}\]/g, "").replace(/[•*#>`_]/g, " ").slice(0, 900);
+      const clean = toSpeech(text);
       const engine = settings?.tts_engine ?? "auto";
       const tryPiper = engine === "piper" || ((engine === "auto" || engine === "sapi") && !piperBroken.current);
       if (tryPiper) {
@@ -210,7 +270,8 @@ export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEven
       const blob = new Blob(chunks.current, { type: rec.mimeType || "audio/webm" });
       const form = new FormData();
       form.append("file", blob, "fala.webm");
-      const res = await api.upload<{ text: string }>("/api/voice/transcribe", form);
+      // 1ª transcrição pode incluir o carregamento do modelo; depois, ~2 s por frase.
+      const res = await api.upload<{ text: string }>("/api/voice/transcribe", form, 90_000);
       // deferIdle: quem chamou segue para "processando" sem passar por "repouso".
       if (!deferIdle) setState("idle");
       if (!res.text) {
@@ -249,25 +310,14 @@ export function useVoice(settings: VoiceSettings | null, onEvent?: (e: VoiceEven
         // o microfone está realmente captando → LISTENING
         emit({ type: "mic_started" });
         if (opts.onUtterance && micMeter.current) {
-          // Detecção de fim de fala pela energia real do microfone.
-          const started = performance.now();
-          let heard = false;
-          let quietSince = 0;
+          // Detecção de fim de fala pela energia real do microfone (limiares adaptativos).
+          const vad = createVad(opts.maxSeconds ?? 12);
           vadTimer.current = setInterval(() => {
-            const lvl = micMeter.current?.read().level ?? 0;
-            const now = performance.now();
-            if (lvl > VAD_SPEECH) {
-              heard = true;
-              quietSince = 0;
-            } else if (heard && lvl < VAD_SILENCE) {
-              quietSince ||= now;
-            }
-            const tooLong = now - started > (opts.maxSeconds ?? 15) * 1000;
-            const noSpeech = !heard && now - started > 6000;
-            if ((heard && quietSince && now - quietSince > SILENCE_MS) || tooLong || noSpeech) {
+            const verdict = vad.feed(micMeter.current?.read().level ?? 0, performance.now());
+            if (verdict) {
               if (vadTimer.current) clearInterval(vadTimer.current);
               vadTimer.current = null;
-              if (noSpeech && !tooLong) {
+              if (verdict === "no_speech") {
                 // nada foi dito: encerra sem transcrever
                 rec.onstop = null;
                 rec.stop();

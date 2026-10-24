@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from datetime import UTC, datetime
@@ -11,6 +12,7 @@ from app.core.db import Database, utcnow
 from app.providers.anthropic_provider import AnthropicProvider, estimate_cost
 from app.providers.base import LLMProvider, LLMResponse, ProviderError, TurnState
 from app.providers.embeddings import HashEmbedder, OllamaEmbedder
+from app.providers.ollama import OllamaProvider
 from app.providers.openai_compat import OpenAICompatProvider
 
 log = logging.getLogger("jarvis.ai")
@@ -51,9 +53,9 @@ class ProviderManager:
     def build_local(self, cfg: dict) -> LLMProvider | None:
         if not cfg.get("local_model"):
             return None
-        base = cfg["local_url"].rstrip("/")
-        return OpenAICompatProvider("ollama", base + "/v1", cfg["local_model"], None, cfg["timeout_s"],
-                                    remote=False, health_url=base + "/api/tags")
+        # Em CPU, o 1º pedido pode carregar o modelo do disco: o tempo-limite local é maior.
+        return OllamaProvider(cfg["local_url"], cfg["local_model"], max(cfg["timeout_s"], cfg.get("local_timeout_s", 120)),
+                              num_ctx=cfg.get("local_num_ctx", 8192))
 
     def chain(self) -> list[LLMProvider]:
         if self._override is not None:
@@ -89,6 +91,20 @@ class ProviderManager:
             if ok:
                 out.append(p)
         return out
+
+    async def warm_local(self) -> None:
+        """Pré-carrega o modelo local (Ollama) para o 1º pedido não esperar o carregamento do disco."""
+        cfg = self.settings.get("ai")
+        if cfg["mode"] in ("rules_only", "remote_only"):
+            return
+        local = self.build_local(cfg)
+        if isinstance(local, OllamaProvider):
+            ok, _ = await local.available()
+            if ok:
+                t0 = time.perf_counter()
+                loaded = await local.warm()
+                log.info("Modelo local %s %s em %.1fs", local.model, "carregado" if loaded else "não carregou",
+                         time.perf_counter() - t0)
 
     def embedder(self):
         cfg = self.settings.get("ai")
@@ -129,10 +145,20 @@ class ProviderManager:
             (utcnow(), provider.name, model, inp, out, cost, int(ok), latency_ms, (error or "")[:300] or None),
         )
 
-    async def timed_step(self, provider: LLMProvider, state: TurnState, tools) -> LLMResponse:
+    async def timed_step(self, provider: LLMProvider, state: TurnState, tools, deadline: float | None = None) -> LLMResponse:
+        """Uma etapa do modelo; ``deadline`` (time.monotonic) limita o tempo TOTAL do pedido."""
         t0 = time.perf_counter()
         try:
-            resp = await provider.step(state, tools)
+            if deadline is not None:
+                remaining = deadline - time.monotonic()
+                if remaining <= 1:
+                    raise ProviderError(f"{provider.name}: tempo total do pedido esgotado", retryable=False)
+                try:
+                    resp = await asyncio.wait_for(provider.step(state, tools), remaining)
+                except TimeoutError as e:
+                    raise ProviderError(f"{provider.name}: tempo total do pedido esgotado", retryable=False) from e
+            else:
+                resp = await provider.step(state, tools)
         except ProviderError as e:
             self.record(provider, None, False, int((time.perf_counter() - t0) * 1000), str(e))
             raise

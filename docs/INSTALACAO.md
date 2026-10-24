@@ -29,8 +29,8 @@ O `setup.bat` **pergunta antes** de cada instalação pelo `winget` (fonte ofici
 |---|---|
 | Ambiente Python com voz local (`backend\.venv`) | ~800 MB (sem voz: ~200 MB) |
 | Pacotes da interface (`frontend\node_modules`) | ~130 MB |
-| Modelos de voz: Piper pt-BR + Whisper base (`data\models`) | ~200 MB |
-| **Total padrão** | **~1,1 GB** (medido em Linux; no Windows é semelhante) |
+| Modelos de voz: Piper pt-BR (Cadu) + Whisper small (`data\models`) | ~530 MB |
+| **Total padrão** | **~1,5 GB** (medido em Linux; no Windows é semelhante) |
 | WhatsApp Web (`-WhatsApp`): Playwright + Chromium | +~300 MB |
 | IA local (`-Ollama`): Ollama + `qwen2.5:3b` | +~1 GB + ~1,9 GB |
 
@@ -79,7 +79,7 @@ As opções ficam salvas. Se você usou `-WhatsApp` uma vez, as próximas execu�
    - Informa se há chave da nuvem, sem mostrar o valor.
    - Detecta se o Ollama está instalado, em execução e com o modelo baixado.
 10. **Voz e microfone:**
-    - Confere os pacotes de voz e baixa os modelos (Piper pt-BR e Whisper base, uma vez só).
+    - Confere os pacotes de voz e baixa os modelos (voz Piper Cadu e Whisper small, uma vez só).
     - Lê a permissão de microfone do Windows (Privacidade → Microfone) e lista os dispositivos de entrada.
     - **O microfone não é ligado.**
 11. **Testes de integridade:**

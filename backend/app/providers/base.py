@@ -47,6 +47,7 @@ class TurnState:
 
     system: str
     messages: list[Any] = field(default_factory=list)
+    extra: dict[str, Any] = field(default_factory=dict)  # dados auxiliares do provedor (ex.: id → nome da ferramenta)
 
 
 class LLMProvider(Protocol):

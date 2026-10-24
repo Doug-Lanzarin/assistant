@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useToast } from "../components/Toasts";
+import { VoicePicker } from "../components/VoicePicker";
 import { Card, Empty, fmtDate, Pill, RISK_LABEL, Tabs } from "../components/ui";
 import { useApi } from "../hooks/useApi";
 import { api, auth } from "../services/api";
@@ -30,7 +31,7 @@ const LABELS: Record<string, string> = {
   "assistant.name": "Nome do assistente", "assistant.user_name": "Seu nome", "assistant.personality": "Personalidade", "assistant.verbosity": "Estilo de resposta",
   "voice.enabled": "Voz habilitada", "voice.wake_word": "Palavra de ativação", "voice.wake_model": "Modelo de ativação (openWakeWord)",
   "voice.wake_threshold": "Sensibilidade da ativação (0–1)", "voice.stt_model": "Modelo de transcrição", "voice.stt_language": "Idioma da transcrição",
-  "voice.tts_engine": "Motor de fala", "voice.tts_voice": "Voz (nome)", "voice.rate": "Velocidade da fala", "voice.volume": "Volume",
+  "voice.tts_engine": "Motor de fala", "voice.stt_beam_size": "Precisão da transcrição (1 = rápida, 5 = precisa)", "voice.tts_voice": "Voz (nome)", "voice.rate": "Velocidade da fala", "voice.volume": "Volume",
   "memory.consolidate_interval_min": "Intervalo da consolidação (min)", "memory.rag_top_k": "Trechos recuperados por pergunta", "memory.min_score": "Relevância mínima",
   "home_assistant.url": "URL do Home Assistant", "home_assistant.verify_ssl": "Verificar certificado TLS", "home_assistant.timeout_s": "Tempo limite (s)",
   "tcl.climate_entity": "Entidade climate.* do ar TCL", "tcl.model": "Modelo do aparelho", "tcl.integration": "Integração usada no HA",
@@ -206,16 +207,18 @@ function VoiceSettings({ values, onSaved }: { values: Record<string, unknown>; o
           <Pill kind={d?.agent_voice ? "ok" : "warn"}>Microfone do agente {d?.agent_voice ? "disponível" : "indisponível"}</Pill>
           <Pill kind={voices.length ? "ok" : ""}>Vozes pt-BR do navegador: {voices.length}</Pill>
         </div>
-        {!d?.stt_installed && <p className="muted small">Instale com scripts\install.ps1 -Voice (ou pip install -r backend/requirements-voice.txt).</p>}
+        {!d?.stt_installed && <p className="muted small">Instale executando o setup.bat (a voz local é instalada por padrão).</p>}
         <div className="row" style={{ marginTop: 10 }}>
           <button className="btn" disabled={!d?.agent_voice} onClick={() => agent("listen")}>Falar agora (microfone do PC)</button>
           <button className="btn" disabled={!d?.agent_voice} onClick={() => agent(values.wake_word_enabled ? "wake_off" : "wake_on")}>{values.wake_word_enabled ? "Desligar palavra de ativação" : "Ligar palavra de ativação"}</button>
           <button className="btn" disabled={!d?.agent_voice} onClick={() => agent("stop_speaking")}>Interromper fala</button>
         </div>
       </Card>
+      <Card title="Voz de resposta">
+        <VoicePicker values={values} onSaved={onSaved} />
+      </Card>
       <Card title="Preferências">
-        <SectionForm name="voice" values={values} onSaved={onSaved} hide={["input_device", "output_device"]} />
-        {!!voices.length && <p className="muted small">Vozes do navegador disponíveis (use o nome em tts_voice): {voices.join(", ")}</p>}
+        <SectionForm name="voice" values={values} onSaved={onSaved} hide={["input_device", "output_device", "tts_voice", "stt_prompt"]} />
       </Card>
       {d?.devices && !d.devices.error && (
         <Card title="Dispositivos de áudio (agente)">

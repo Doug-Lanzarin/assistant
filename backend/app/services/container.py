@@ -77,6 +77,7 @@ def build_services(env: Settings) -> Services:
     db.migrate()
     toml = load_toml(env.config_file)
     settings = SettingsStore(db)
+    settings.migrate()
     secrets = SecretStore(env.secrets_dir)
     events = EventBus()
     agent = AgentBridge()

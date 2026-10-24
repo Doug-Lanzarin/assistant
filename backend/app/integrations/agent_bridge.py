@@ -19,7 +19,7 @@ log = logging.getLogger("jarvis.agent")
 
 
 class AgentUnavailable(RuntimeError):
-    def __init__(self, msg: str = "O agente local do Windows não está conectado. Inicie-o com scripts\\start.ps1 (ou 'python -m jarvis_agent')."):
+    def __init__(self, msg: str = "O agente local do Windows não está conectado. Inicie o JARVIS pelo start.bat (ele sobe o agente junto)."):
         super().__init__(msg)
 
 

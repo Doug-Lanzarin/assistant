@@ -6,8 +6,8 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`); no Windows,
 ## Resumo
 | Suíte | Testes | Resultado |
 |---|---|---|
-| Backend (pytest) | 172 | ✅ 172 aprovados |
-| Interface (Vitest + Testing Library + axe-core) | 27 | ✅ 27 aprovados |
+| Backend (pytest) | 217 | ✅ 217 aprovados |
+| Interface (Vitest + Testing Library + axe-core) | 36 | ✅ 36 aprovados |
 | Lint (ruff, regras de segurança S/B/BLE) | — | ✅ sem pendências |
 | TypeScript estrito + build de produção | — | ✅ |
 | Sintaxe dos scripts PowerShell (parser do PowerShell 7.4) | 12 scripts | ✅ |
@@ -29,6 +29,8 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`); no Windows,
 | `test_api_security.py` | 14 | 12 rotas protegidas retornam 401 sem token; primeiro cadastro único; login/logout; **rate limit**; senha com scrypt e token só como hash; **segredos nunca retornados** e cifrados em disco; logs mascaram chaves; entradas malformadas (422/400); path traversal no backup; **backup → alterar → restaurar**; ZIP malicioso recusado; CORS de origem estranha bloqueado e headers de segurança; WebSocket exige token; **backend real (uvicorn) + agente REAL via WebSocket** salvando e copiando o clipboard | automatizado + E2E |
 | `test_agent.py` | 18 | métodos fora da lista recusados; parâmetros inválidos; clipboard Unicode; metacaracteres de shell recusados; argumentos inválidos; só URLs http(s); caminho inexistente; `process.run` sem shell (`a && echo hacked` passa literalmente); timeout de processo; lançamento real de processo | automatizado |
 | `test_setup_scripts.py` | 14 | instalador e inicialização: leitura do `.env` (comentários, aspas, BOM) sem sobrescrever o ambiente; chaves nunca exibidas; `.env.example` sem valores de chave; impressão digital (idempotência) ignora `node_modules`; requisitos por recurso e alternativa do openWakeWord; `start` recusa sem configuração concluída ou com dependências alteradas; falha obrigatória remove o indicador e retorna 1; recursos escolhidos são lembrados; `.env`/`jarvis.toml` existentes preservados byte a byte e chave fora do log; `jarvisctl run`/`setup-status` sem setup → código 1; `.bat` em ASCII com CRLF e `.ps1` com BOM | automatizado |
+| `test_conversation_usability.py` | 29 | cumprimentos, agradecimentos, despedidas e "quem é você" respondidos sem IA, espelhando o cumprimento; pedidos NÃO capturados ("boa noite, desligue as luzes" executa o comando); cumprimento não dispara rotina; ferramentas para modelo local são poucas e relevantes (prompt 5× menor); Ollama pela API nativa (`num_ctx`, `keep_alive`, ferramentas, erros, pré-carregamento); limite total do pedido (modelo travado não segura a interface); preferências gravam só diferenças e migram o padrão antigo `base` → `small` uma única vez | automatizado (Ollama simulado pela API documentada) |
+| `test_voice_output.py` | 16 | texto preparado para a fala (horários, graus, %, reais, listas, links, código, citações); catálogo só com vozes oficiais do Piper (HTTPS fixo; nome fora do catálogo → 400); escolha da voz preferida; amostra com voz e velocidade; estado do pré-carregamento | automatizado |
 | `test_whatsapp_web.py` | 2 | adaptador Playwright: login, não lidas, busca de contato, envio com verificação, falha detectada, conversa inexistente | simulado (página local que imita o WhatsApp Web) |
 
 ## Interface
@@ -49,6 +51,20 @@ Comando: `scripts\test.ps1` (ou `python scripts/jarvisctl.py test`); no Windows,
 | Voz: Piper sintetiza pt-BR → faster-whisper transcreve (tiny/base/small); vocabulário de contexto melhora "Jarvis" de 0/5 para 5/5 | ✅ (voz sintetizada, não humana) |
 | **IA local real** (llama.cpp server compatível com OpenAI + Qwen2.5-1.5B-Instruct Q4, CPU): o modelo chamou `brain_search` e `task_create` pelo registro de ferramentas; o loop completo (resultado → resposta) funcionou depois da correção do formato da mensagem | ✅ · revelou 3 defeitos, todos corrigidos e com teste: (1) mensagem de assistente reenviada fora do formato canônico → HTTP 500; (2) modelo fraco repetindo a mesma ferramenta → 6 tarefas duplicadas (agora chamadas idênticas não são reexecutadas); (3) modelo alterando dados existentes por conta própria → agora exige confirmação |
 | openWakeWord `hey_jarvis`: custo de CPU e ausência de falso positivo em ruído | ✅ · detecção com voz pt sintetizada ❌ (ver desempenho) |
+
+## Usabilidade da voz (24/10/2026)
+Investigação do relato "falo boa noite e fica só processando", com áudio real: frases faladas pelo Piper tocadas como microfone do Chromium, Whisper local, resposta e voz.
+
+| Cenário | Antes | Depois |
+|---|---|---|
+| 1ª transcrição após iniciar | ~24 s (modelo carregado no 1º uso) | modelo carregado na inicialização (1–2 s, em segundo plano) |
+| "Boa noite" / "Que horas são?" / "Bom dia, Jarvis" transcritos | "Ponoichi" / "Kjorsson" / "Condio, Jarvis" | corretos; erro de palavras 38% → ~3% em 24 gravações |
+| Resposta a "boa noite" | sem IA: "Não reconheci…"; "Boa noite, Jarvis" executava a rotina de cena do Home Assistant; "bom dia" abria programas | "Boa noite! Em que posso ajudar?" (sem IA, ~10 ms) |
+| Fim da fala com ruído de fundo | até 15 s de gravação | ~0,9 s após parar de falar (teste com ruído constante) |
+| Fim da fala → resposta tocando (orb aberto, "Boa noite, Jarvis.") | 3,5 s | **2,5 s** (transcrição 2,3 s com a animação otimizada) |
+| Sequência do orb | — | IDLE → LISTENING → THINKING → SPEAKING → IDLE, correlação amplitude × raio 0,995, sem erros no console |
+
+Também verificado: menu lateral fechado ao abrir (☰ abre; fecha ao navegar, ao clicar fora e com Esc), tela de escolha de voz com amostras e captura no celular. **Não executado:** Ollama real (download bloqueado neste ambiente), vozes "Natural" do Edge (o Chromium de teste não as tem) e qualquer medição no seu i5.
 
 ## Instalador e inicialização
 Executado em 2026-10-22 numa **cópia limpa** do projeto (sem `.venv`, `node_modules`, `dist`, `data`, `.env` nem `jarvis.toml`), num caminho com espaços, parênteses, `&` e acentos.

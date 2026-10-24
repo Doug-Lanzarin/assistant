@@ -3,10 +3,11 @@
 Ordem de decisão:
 1. Resposta a uma confirmação pendente ("pode enviar", "não").
 2. Escolha entre opções apresentadas ("o segundo", "#12").
-3. Frases de rotina cadastradas ("estou saindo de casa").
-4. Interpretador determinístico pt-BR (offline, sem custo).
-5. Modelo de IA com ferramentas registradas (nuvem ou local, com fallback).
-6. Sem IA: busca na memória e explicação honesta do limite.
+3. Conversa social ("boa noite", "obrigado"), respondida na hora e sem IA.
+4. Frases de rotina cadastradas ("estou saindo de casa").
+5. Interpretador determinístico pt-BR (offline, sem custo).
+6. Modelo de IA com ferramentas registradas (nuvem ou local, com fallback).
+7. Sem IA: busca na memória e explicação honesta do limite.
 """
 
 from __future__ import annotations
@@ -15,14 +16,16 @@ import asyncio
 import json
 import logging
 import re
+import time
 from datetime import datetime
 from typing import Any
 
 from app.core.db import from_json, to_json, utcnow
-from app.orchestrator import intents
+from app.orchestrator import intents, smalltalk
 from app.orchestrator.executor import Outcome
 from app.orchestrator.registry import ToolContext
 from app.orchestrator.textnorm import fold, normalize_key, strip_wake_word
+from app.orchestrator.tool_select import select_tools
 from app.providers.base import ChatMessage, LLMProvider, ProviderError
 
 log = logging.getLogger("jarvis.orchestrator")
@@ -163,18 +166,30 @@ class Orchestrator:
                 return self._reply_from_outcomes([out], "regras", state, choice["tool"], args)
             state.pop("choice", None)
 
-        # 3) rotina por frase
-        rt = None
-        for r in self.s.toml.routines:
-            if normalize_key(clean) in {normalize_key(a) for a in r.aliases}:
-                rt = r
-                break
+        # 3) conversa social ("boa noite", "obrigado"): resposta imediata, sem IA.
+        #    Vem antes das rotinas: um cumprimento nunca dispara ações (ex.: alias "bom dia").
+        a = self.s.settings.get("assistant")
+        social = smalltalk.reply(clean, a["user_name"], a["name"], state)
+        if social:
+            routine = self._routine_for(clean)
+            if routine:
+                social += f" (Para executar a rotina \"{routine.name}\", diga \"rotina {routine.name}\".)"
+            return {"text": social, "actions": [], "provider": "regras", "sources": []}
+        greeting, rest = smalltalk.split_greeting(clean)
+        if greeting and rest.strip() and normalize_key(rest) not in {normalize_key(w) for w in (wake, "jarvis")}:
+            reply = await self._dispatch(rest, cid, origin)
+            said = re.search(r"\b(bom dia|boa tarde|boa noite)\b", fold(greeting))
+            reply["text"] = f"{said.group(1).capitalize() if said else 'Olá'}! {reply['text']}"
+            return reply
+
+        # 4) rotina por frase
+        rt = self._routine_for(clean)
         if rt:
             ctx = ToolContext(self.s, cid, origin, state=state)
             out = await self.s.executor.run("routine_run", {"name": rt.name}, ctx)
             return self._reply_from_outcomes([out], "regras")
 
-        # 4) intenção determinística
+        # 5) intenção determinística
         ai_mode = self.s.settings.get("ai")["mode"]
         intent = intents.parse(clean, wake)
         if intent:
@@ -188,17 +203,26 @@ class Orchestrator:
                     reply["provider"] = summary["provider"]
             return reply
 
-        # 5) IA
+        # 6) IA
         providers = await self.s.providers.achain() if ai_mode != "rules_only" else []
         if providers:
             reply = await self._llm_turn(clean, cid, origin, state, providers)
             if reply is not None:
                 return reply
 
-        # 6) sem IA
+        # 7) sem IA
         return await self._no_ai_fallback(clean, cid, origin, state, bool(providers))
 
     # -- opções -----------------------------------------------------------------------------
+    def _routine_for(self, text: str):
+        key = normalize_key(text)
+        for r in self.s.toml.routines:
+            names = {normalize_key(x) for x in r.aliases} | {normalize_key(f"rotina {r.name}"),
+                                                             normalize_key(f"rotina de {r.name}")}
+            if key in names:
+                return r
+        return None
+
     @staticmethod
     def _pick_option(folded: str, options: list[dict]) -> dict | None:
         t = re.sub(r"^(o|a|quero|e|eh|é|use|esse|essa)\s+", "", folded).strip()
@@ -308,6 +332,8 @@ class Orchestrator:
         cfg = self.s.settings.get("ai")
         history = self.history(cid, cfg["history_messages"] + 1)[:-1]  # sem a mensagem atual
         errors: list[str] = []
+        # Limite total do pedido (todas as etapas e provedores): a interface nunca fica "processando" para sempre.
+        deadline = time.monotonic() + cfg.get("turn_deadline_s", 150)
         for provider in providers:
             budget = self.s.providers.check_budget(provider)
             if budget:
@@ -316,8 +342,12 @@ class Orchestrator:
             context, hits = await self._context_block(text, provider)
             now = datetime.now().astimezone().strftime("%Y-%m-%d %H:%M (%A)")
             user_block = f"{context}[data/hora atual: {now}]\n{text}"
-            tools = (self.s.registry.anthropic_tools() if provider.tool_format() == "anthropic"
-                     else self.s.registry.openai_tools())
+            names = None
+            if not provider.remote:  # modelo local em CPU: só as ferramentas relevantes (prompt menor = resposta mais rápida)
+                exposed = {t.name for t in self.s.registry.all() if t.expose_to_llm}
+                names = select_tools(text, exposed, cfg.get("local_max_tools", 8))
+            tools = (self.s.registry.anthropic_tools(names) if provider.tool_format() == "anthropic"
+                     else self.s.registry.openai_tools(names))
             st = provider.start(self._system_prompt(), history, user_block)
             outcomes: list[Outcome] = []
             sources: list[dict] = list(hits)
@@ -327,7 +357,7 @@ class Orchestrator:
             try:
                 final_text = ""
                 for _ in range(cfg["max_tool_iterations"]):
-                    resp = await self.s.providers.timed_step(provider, st, tools)
+                    resp = await self.s.providers.timed_step(provider, st, tools, deadline)
                     if resp.refusal:
                         final_text = "Não posso ajudar com esse pedido."
                         break
@@ -468,11 +498,7 @@ class Orchestrator:
 
 
 def speakable(text: str, max_chars: int = 600) -> str:
-    """Versão falável: remove marcadores, citações e trechos longos de código."""
-    t = re.sub(r"```.*?```", " (trecho de código omitido) ", text, flags=re.S)
-    t = re.sub(r"\[[^\]]{0,80}\]", "", t)
-    t = re.sub(r"[•*#>`_]+", " ", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    if len(t) > max_chars:
-        t = t[:max_chars].rsplit(" ", 1)[0] + "… Os detalhes estão na tela."
-    return t
+    """Versão falável da resposta (horários, unidades, sem símbolos nem citações)."""
+    from app.voice.speech_text import to_speech
+
+    return to_speech(text, max_chars)

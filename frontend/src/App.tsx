@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ToastProvider, useToast } from "./components/Toasts";
 import { useApi, useEvents } from "./hooks/useApi";
 import { Brain } from "./pages/Brain";
@@ -35,7 +35,29 @@ function Shell({ onLogout }: { onLogout: () => void }) {
   const toast = useToast();
   const [page, setPage] = useState<PageId>(currentPage);
   const [busy, setBusy] = useState(false);
+  // Menu lateral SEMPRE começa fechado; abre só ao clicar no botão ☰.
+  const [menuOpen, setMenuOpen] = useState(false);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+  const firstItemRef = useRef<HTMLButtonElement>(null);
   const settings = useApi<SettingsT>("/api/settings");
+
+  const closeMenu = useCallback((returnFocus = true) => {
+    setMenuOpen(false);
+    if (returnFocus) toggleRef.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    firstItemRef.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        closeMenu();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [menuOpen, closeMenu]);
 
   useEffect(() => {
     const onHash = () => setPage(currentPage());
@@ -57,17 +79,25 @@ function Shell({ onLogout }: { onLogout: () => void }) {
 
   const go = useCallback((p: string) => {
     location.hash = `#/${p}`;
+    setMenuOpen(false);
   }, []);
 
   return (
-    <div className="app">
-      <nav className="sidebar" aria-label="Navegação principal">
+    <div className={`app ${menuOpen ? "menu-open" : ""}`}>
+      <button ref={toggleRef} className={`menu-toggle ${busy ? "busy" : ""}`} aria-expanded={menuOpen} aria-controls="menu-lateral"
+        aria-label={menuOpen ? "Fechar menu" : "Abrir menu"} title={menuOpen ? "Fechar menu (Esc)" : "Menu"}
+        onClick={() => (menuOpen ? closeMenu() : setMenuOpen(true))}>
+        <span aria-hidden="true">{menuOpen ? "✕" : "☰"}</span>
+      </button>
+      {menuOpen && <div className="menu-scrim" aria-hidden="true" onClick={() => closeMenu()} />}
+      <nav id="menu-lateral" className="sidebar" aria-label="Navegação principal" hidden={!menuOpen}>
         <div className="brand">
           <div className={`brand-orb ${busy ? "busy" : ""}`} aria-hidden="true" />
           JARVIS
         </div>
-        {PAGES.map((p) => (
-          <button key={p.id} className="nav-btn" aria-current={page === p.id ? "page" : undefined} onClick={() => go(p.id)}>
+        {PAGES.map((p, i) => (
+          <button key={p.id} ref={i === 0 ? firstItemRef : undefined} className="nav-btn"
+            aria-current={page === p.id ? "page" : undefined} onClick={() => go(p.id)}>
             <span aria-hidden="true">{p.icon}</span>
             {p.label}
           </button>

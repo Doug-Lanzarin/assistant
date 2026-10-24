@@ -228,14 +228,7 @@ export class OrbEngine {
 
     ctx.save();
     ctx.globalCompositeOperation = "source-over";
-    ctx.fillStyle = "#01040b";
-    ctx.fillRect(0, 0, w, h);
-    const vg = ctx.createRadialGradient(cx, cy, R * 0.5, cx, cy, Math.max(w, h) * 0.7);
-    vg.addColorStop(0, `rgba(${pr >> 2},${pg >> 2},${pb >> 2},${0.5 * p.presence})`);
-    vg.addColorStop(0.45, "rgba(3, 10, 24, 0.65)");
-    vg.addColorStop(1, "rgba(0, 0, 0, 1)");
-    ctx.fillStyle = vg;
-    ctx.fillRect(0, 0, w, h);
+    this.drawBackground(ctx, w, h, cx, cy, R, pr, pg, pb, p.presence);
 
     ctx.globalCompositeOperation = "lighter";
     ctx.translate(cx, cy);
@@ -252,6 +245,38 @@ export class OrbEngine {
     }
     this.drawCore(ctx, R, prim, acc, glow);
     ctx.restore();
+  }
+
+  private bg: { key: string; canvas: HTMLCanvasElement } | null = null;
+
+  /** Fundo (degradê de tela inteira): caro em CPU, então é desenhado uma vez e reaproveitado
+   *  enquanto tamanho, cor e presença não mudam de forma perceptível. */
+  private drawBackground(ctx: CanvasRenderingContext2D, w: number, h: number, cx: number, cy: number, R: number,
+    pr: number, pg: number, pb: number, presence: number) {
+    const scale = ctx.getTransform?.().a || 1;
+    const key = `${Math.round(w)}x${Math.round(h)}@${scale}|${pr >> 3},${pg >> 3},${pb >> 3}|${Math.round(presence * 20)}`;
+    if (!this.bg || this.bg.key !== key) {
+      const c = this.bg?.canvas ?? document.createElement("canvas");
+      c.width = Math.max(1, Math.round(w * scale));
+      c.height = Math.max(1, Math.round(h * scale));
+      const b = c.getContext("2d");
+      if (!b) {
+        ctx.fillStyle = "#01040b";
+        ctx.fillRect(0, 0, w, h);
+        return;
+      }
+      b.setTransform(scale, 0, 0, scale, 0, 0);
+      b.fillStyle = "#01040b";
+      b.fillRect(0, 0, w, h);
+      const vg = b.createRadialGradient(cx, cy, R * 0.5, cx, cy, Math.max(w, h) * 0.7);
+      vg.addColorStop(0, `rgba(${pr >> 2},${pg >> 2},${pb >> 2},${0.5 * presence})`);
+      vg.addColorStop(0.45, "rgba(3, 10, 24, 0.65)");
+      vg.addColorStop(1, "rgba(0, 0, 0, 1)");
+      b.fillStyle = vg;
+      b.fillRect(0, 0, w, h);
+      this.bg = { key, canvas: c };
+    }
+    ctx.drawImage(this.bg.canvas, 0, 0, w, h);
   }
 
   private drawHud(ctx: CanvasRenderingContext2D, R: number, prim: (a: number) => string) {

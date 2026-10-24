@@ -2,7 +2,7 @@
 
 JARVIS é um assistente pessoal **local** para Windows. Ele conversa por texto e voz em português, executa ações autorizadas no computador, controla a casa pelo Home Assistant, trabalha com o WhatsApp dentro do que as plataformas permitem e funciona como **segundo cérebro**, com memória de longo prazo, busca semântica, documentos, projetos, grafo de relações e memória da área de transferência.
 
-> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 172 testes de backend e 27 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
+> **Estado do projeto:** o software está implementado e testado em ambiente Linux de desenvolvimento, com 217 testes de backend e 36 de interface. Os itens que dependem do seu Windows, das suas contas ou dos seus dispositivos estão marcados como **pendentes de validação externa** em [PROJECT_STATUS.md](PROJECT_STATUS.md). Leia esse arquivo antes de considerar algo "pronto".
 
 ## Interface
 
@@ -35,7 +35,7 @@ Os comandos acima funcionam **sem IA e sem internet**, por meio de um interpreta
 
 **Execuções seguintes**
 
-- Dê dois cliques em **`start.bat`**. Quando aparecer "JARVIS pronto", o navegador abre no AI Voice Orb (`http://127.0.0.1:8765/#/jarvis`).
+- Dê dois cliques em **`start.bat`**. Quando aparecer "JARVIS pronto", o navegador abre no AI Voice Orb (`http://127.0.0.1:8765/#/jarvis`). O menu das outras telas fica no botão ☰, no canto superior esquerdo.
 - Para encerrar, aperte **Ctrl+C** na janela do JARVIS (ou feche a janela).
 
 No primeiro acesso, você cria o usuário e a senha do painel. Isso só é possível a partir do próprio computador. Depois disso:
@@ -98,7 +98,7 @@ data/               criado pelo setup: banco, logs, segredos, backups, modelos d
 
 ```bash
 cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt
-.venv/bin/python -m pytest -q            # 172 testes
+.venv/bin/python -m pytest -q            # 217 testes
 cd ../frontend && npm ci && npm test && npm run build
 python scripts/jarvisctl.py start --dev  # backend com recarga + agente
 cd frontend && npm run dev               # interface em http://127.0.0.1:5173 (proxy para a API)

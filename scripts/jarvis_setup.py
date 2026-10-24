@@ -626,21 +626,21 @@ class Setup:
                 r.detail(res.stderr[-1500:])
                 r.warn(f"{label}: instalado, mas não carregou", (res.stderr.strip().splitlines() or [""])[-1][:200])
         models = data_dir() / "models"
-        piper_ok = any((models / "piper").glob("*.onnx"))
-        whisper_ok = any((models / "whisper").glob("**/model.bin"))
+        piper_ok = (models / "piper" / "pt_BR-cadu-medium.onnx").exists()  # voz padrão (as demais são opcionais)
+        whisper_ok = any((models / "whisper").glob("models--Systran--faster-whisper-small/**/model.bin"))
         if (not piper_ok or not whisper_ok) and (have["faster_whisper"] or have["piper"]):
             if self.o.offline:
                 r.skip("modelos de voz não baixados (modo offline)")
             else:
-                r.line("baixando modelos de voz (Piper pt-BR ~60 MB + Whisper base ~145 MB, uma vez só)…")
+                r.line("baixando modelos de voz (voz Piper Cadu ~63 MB + Whisper small ~460 MB, uma vez só)…")
                 run_logged(r, [self.py, str(REPO / "scripts" / "download_voice_models.py"),
                                "--data-dir", str(data_dir())], REPO, 1800)
-                piper_ok = any((models / "piper").glob("*.onnx"))
-                whisper_ok = any((models / "whisper").glob("**/model.bin"))
+                piper_ok = (models / "piper" / "pt_BR-cadu-medium.onnx").exists()
+                whisper_ok = any((models / "whisper").glob("models--Systran--faster-whisper-small/**/model.bin"))
         if have["piper"]:
-            (r.ok if piper_ok else r.warn)("modelo de voz Piper pt-BR" + ("" if piper_ok else " ausente — será usada a voz do sistema"))
+            (r.ok if piper_ok else r.warn)("voz Piper pt-BR (Cadu)" + ("" if piper_ok else " ausente — será usada outra voz instalada ou a do sistema"))
         if have["faster_whisper"]:
-            (r.ok if whisper_ok else r.warn)("modelo de transcrição Whisper" + ("" if whisper_ok else " ausente — será baixado no primeiro uso"))
+            (r.ok if whisper_ok else r.warn)("modelo de transcrição Whisper small" + ("" if whisper_ok else " ausente — será baixado no primeiro uso"))
         if not have["faster_whisper"]:
             r.warn("sem transcrição local, o orb não entende comandos falados", "execute setup.bat novamente; detalhes no relatório")
         self.microphone(have["sounddevice"])

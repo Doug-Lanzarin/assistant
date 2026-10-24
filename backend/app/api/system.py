@@ -6,7 +6,7 @@ import asyncio
 import tempfile
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
@@ -93,7 +93,7 @@ def get_settings(s: Services = Depends(services)):
 
 
 @router.patch("/settings/{section}")
-def patch_settings(section: str, values: dict, s: Services = Depends(services)):
+def patch_settings(section: str, values: dict, background: BackgroundTasks, s: Services = Depends(services)):
     if section not in DEFAULTS:
         raise HTTPException(404, "Seção desconhecida")
     try:
@@ -102,6 +102,8 @@ def patch_settings(section: str, values: dict, s: Services = Depends(services)):
         raise HTTPException(400, str(e)) from e
     if section == "ai" and {"embedding_provider", "embedding_model", "local_url"} & set(values):
         s.refresh_embedder()
+    if section == "ai" and {"mode", "local_model", "local_url"} & set(values):
+        background.add_task(s.providers.warm_local)  # carrega o novo modelo local já, não no 1º pedido
     return updated
 
 
@@ -213,6 +215,7 @@ async def voice_status(s: Services = Depends(services)):
         except Exception as e:  # noqa: BLE001
             devices = {"error": str(e)}
     return {"stt_installed": STTEngine.installed(), "piper_installed": PiperTTS.installed(),
+            "stt_ready": bool(s.voice and s.voice.stt.ready_model), "stt_loading": s.voice.stt.loading if s.voice else None,
             "piper_voices": s.voice.tts.available_voices() if s.voice else [],
             "agent_voice": s.agent.has_capability("voice"), "devices": devices, "settings": s.settings.get("voice")}
 
@@ -228,13 +231,43 @@ async def transcribe(file: UploadFile = File(...), s: Services = Depends(service
     suffix = Path(file.filename or "audio.webm").suffix or ".webm"
     try:
         return await asyncio.to_thread(s.voice.stt.transcribe_bytes, data, suffix, model=cfg["stt_model"],
-                                       language=cfg["stt_language"], prompt=cfg.get("stt_prompt"))
+                                       language=cfg["stt_language"], prompt=cfg.get("stt_prompt"),
+                                       beam_size=cfg.get("stt_beam_size", 5))
     except VoiceUnavailable as e:
         raise HTTPException(501, str(e)) from e
 
 
 class SpeakIn(BaseModel):
     text: str = Field(..., min_length=1, max_length=2000)
+    voice: str | None = Field(None, max_length=80)  # amostra de uma voz específica (Configurações → Voz)
+    rate: float | None = Field(None, ge=0.5, le=2.0)
+
+
+@router.get("/voice/piper/catalog")
+def piper_catalog(s: Services = Depends(services)):
+    from app.voice.engines import PIPER_CATALOG
+
+    installed = set(s.voice.tts.available_voices()) if s.voice else set()
+    current = s.voice.tts.pick(s.settings.get("voice").get("tts_voice") or None) if installed else None
+    return [{"name": n, **{k: v for k, v in meta.items() if k != "url"}, "installed": n in installed, "current": n == current}
+            for n, meta in PIPER_CATALOG.items()]
+
+
+class VoiceName(BaseModel):
+    name: str = Field(..., max_length=80)
+
+
+@router.post("/voice/piper/download")
+async def piper_download(body: VoiceName, s: Services = Depends(services)):
+    from app.voice.engines import PIPER_CATALOG, VoiceUnavailable
+
+    if body.name not in PIPER_CATALOG:
+        raise HTTPException(400, "Voz fora do catálogo oficial do Piper")
+    try:
+        await asyncio.to_thread(s.voice.tts.download, body.name)
+    except (OSError, VoiceUnavailable) as e:
+        raise HTTPException(502, f"Não foi possível baixar a voz: {e}") from e
+    return {"ok": True, "name": body.name}
 
 
 @router.post("/voice/tts")
@@ -244,7 +277,8 @@ async def tts(body: SpeakIn, s: Services = Depends(services)):
 
     cfg = s.settings.get("voice")
     try:
-        wav = await asyncio.to_thread(s.voice.tts.synthesize, speakable(body.text), cfg.get("tts_voice") or None, cfg["rate"])
+        wav = await asyncio.to_thread(s.voice.tts.synthesize, speakable(body.text),
+                                      body.voice or cfg.get("tts_voice") or None, body.rate or cfg["rate"])
     except VoiceUnavailable as e:
         raise HTTPException(501, str(e)) from e
     return Response(wav, media_type="audio/wav")

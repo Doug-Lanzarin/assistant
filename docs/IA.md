@@ -28,15 +28,25 @@ Recursos usados: chamada de ferramentas (tool use) com o registro do JARVIS, fal
 
 ## Ollama — IA local
 
-1. Instale: https://ollama.com/download (Windows).
-2. Baixe um modelo pequeno com suporte a ferramentas:
+1. Instale: `setup.bat -Ollama` (pelo `winget`, ~1 GB, e baixa o `qwen2.5:3b`, ~1,9 GB) ou https://ollama.com/download/windows.
+2. Ou baixe o modelo à mão:
    ```powershell
-   ollama pull qwen2.5:3b        # ~2 GB de RAM; bom em português e em chamar ferramentas
-   # alternativas: llama3.2:3b, qwen2.5:7b (mais lento em CPU, ~5 GB)
+   ollama pull qwen2.5:3b        # ~2,5 GB de RAM; bom em português e em chamar ferramentas
+   # alternativas: llama3.2:3b, qwen2.5:7b (2 a 3 vezes mais lento em CPU, ~5 GB)
    ```
-3. **Configurações → IA**: `local_model = qwen2.5:3b`, `local_url = http://127.0.0.1:11434`.
+3. **Configurações → IA**: `local_model = qwen2.5:3b`, `local_url = http://127.0.0.1:11434`; modo `local_only` ou `local_first`.
 
-Validado neste ambiente com llama.cpp server + Qwen2.5-1.5B (mesma API): chamadas de ferramenta reais funcionaram, mas modelos de 1,5B escolhem ferramentas de forma pouco confiável; prefira 3B ou mais.
+### Como o JARVIS deixa o modelo local rápido
+| Ajuste | Por quê |
+|---|---|
+| API **nativa** do Ollama (`/api/chat`), não a compatível com OpenAI | a nativa aceita `num_ctx` e `keep_alive` |
+| `num_ctx = 8192` (`ai.local_num_ctx`) | o contexto padrão do Ollama (2 a 4 mil tokens) cortava o prompt sem aviso |
+| `keep_alive = 30m` + carregamento na inicialização e ao trocar de modelo | sem isso, cada pedido após 5 minutos parado recarregava o modelo do disco (dezenas de segundos em CPU) |
+| Só as ferramentas relevantes ao pedido (até `ai.local_max_tools = 8`) | as 47 ferramentas somam ~7 mil tokens; um modelo de 3B em CPU levava dezenas de segundos só para lê-las. Agora "desligue a luz do quarto" leva 4, e "me explica recursão" leva 1 (busca na memória). A nuvem continua recebendo todas |
+| Tempo-limite local de 120 s por etapa e **150 s no total** (`ai.turn_deadline_s`) | um modelo travado não deixa a interface "processando" para sempre: a resposta explica o que houve |
+| Cumprimentos e agradecimentos respondidos sem IA | "boa noite" não espera o modelo |
+
+Validado com testes que seguem a API documentada do Ollama (`backend/tests/test_conversation_usability.py`). Um Ollama **real** não pôde ser executado neste ambiente: o download pelo GitHub é bloqueado aqui. O caminho de ferramentas já tinha sido validado antes com o llama.cpp server e Qwen2.5-1.5B.
 
 Expectativa em i5 sem GPU: modelos de 3B parâmetros geram aproximadamente 8 a 15 tokens/s, ou seja, de 3 a 10 s por resposta curta. Modelos de 7B ficam de 2 a 3 vezes mais lentos. Não carregue modelos maiores que 7B com 16 GB de RAM. **Estes números são estimativas, não foram medidos no seu hardware**; registre os reais com `scripts\benchmark.py` depois de instalar.
 

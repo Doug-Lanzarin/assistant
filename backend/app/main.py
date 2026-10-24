@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import secrets
 import sys
+import threading
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -27,6 +29,24 @@ class VoiceEngines:
     def __init__(self, models_dir: Path):
         self.stt = STTEngine(models_dir)
         self.tts = PiperTTS(models_dir)
+
+
+def _warm_voice(s: Services) -> None:
+    """Carrega Whisper e Piper em segundo plano: o primeiro comando de voz não espera ~20 s."""
+    cfg = s.settings.get("voice")
+    if not cfg["enabled"] or s.voice is None:
+        return
+
+    def run():
+        if STTEngine.installed():
+            s.voice.stt.warm(cfg["stt_model"])
+        if PiperTTS.installed() and s.voice.tts.available_voices():
+            try:
+                s.voice.tts.synthesize("ok", cfg.get("tts_voice") or None)
+            except Exception:  # noqa: BLE001
+                log.exception("Falha ao pré-carregar o Piper")
+
+    threading.Thread(target=run, name="voice-warmup", daemon=True).start()
 
 
 def ensure_agent_token(s: Services) -> str:
@@ -73,6 +93,9 @@ def create_app(env: Settings | None = None, services: Services | None = None) ->
         bg.on_restart = _restart
         if env.env != "test":
             bg.start()
+            _warm_voice(s)
+            warm_task = asyncio.create_task(s.providers.warm_local())  # noqa: RUF006 - referência mantida abaixo
+            app.state.warm_task = warm_task
         log.info("JARVIS iniciado em http://%s:%s", env.host, env.port)
         yield
         await bg.stop()

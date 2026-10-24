@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Baixa os modelos de voz locais (uma única vez, ~200 MB no total).
 
-* Piper pt_BR (voz "faber", qualidade média) → data/models/piper/
-* faster-whisper ``base`` (ou o indicado em --whisper) → data/models/whisper/
+* Piper pt_BR (voz "cadu", qualidade média; --piper cadu,faber,jeff) → data/models/piper/
+* faster-whisper ``small`` (ou o indicado em --whisper) → data/models/whisper/
 * openWakeWord "hey_jarvis" + modelos de base → cache do pacote
 
 Uso: python scripts/download_voice_models.py [--whisper base|small|tiny] [--skip-wake]
@@ -17,8 +17,11 @@ import urllib.request
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[1]
-PIPER_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/faber/medium/"
-PIPER_FILES = ["pt_BR-faber-medium.onnx", "pt_BR-faber-medium.onnx.json"]
+PIPER_HF = "https://huggingface.co/rhasspy/piper-voices/resolve/main/pt/pt_BR/"
+# Vozes pt-BR oficiais do Piper. "cadu" é a padrão (ritmo de conversa); as outras podem ser
+# baixadas também aqui ou em Configurações → Voz.
+PIPER_VOICES = {"cadu": "cadu/medium/pt_BR-cadu-medium", "faber": "faber/medium/pt_BR-faber-medium",
+                "jeff": "jeff/medium/pt_BR-jeff-medium"}
 
 
 def download(url: str, dest: Path) -> None:
@@ -35,15 +38,21 @@ def download(url: str, dest: Path) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--whisper", default="base", choices=["tiny", "base", "small"])
+    ap.add_argument("--whisper", default="small", choices=["tiny", "base", "small"])
     ap.add_argument("--skip-wake", action="store_true")
+    ap.add_argument("--piper", default="cadu", help="vozes Piper separadas por vírgula (cadu,faber,jeff)")
     ap.add_argument("--data-dir", default=os.environ.get("JARVIS_DATA_DIR", str(REPO / "data")))
     a = ap.parse_args()
     models = Path(a.data_dir) / "models"
     (models / "piper").mkdir(parents=True, exist_ok=True)
-    print("Piper (voz pt-BR):")
-    for f in PIPER_FILES:
-        download(PIPER_BASE + f, models / "piper" / f)
+    for name in [v.strip() for v in a.piper.split(",") if v.strip()]:
+        if name not in PIPER_VOICES:
+            print(f"  voz desconhecida: {name}")
+            continue
+        print(f"Piper (voz pt-BR {name}):")
+        for ext in (".onnx", ".onnx.json"):
+            rel = PIPER_VOICES[name] + ext
+            download(PIPER_HF + rel, models / "piper" / rel.rsplit("/", 1)[1])
     print(f"faster-whisper ({a.whisper}):")
     try:
         from faster_whisper import WhisperModel

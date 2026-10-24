@@ -4,7 +4,7 @@ import { OrbEngine, type OrbSnapshot, type OrbState } from "./engine";
 
 declare global {
   interface Window {
-    __jarvisOrb?: () => OrbSnapshot;
+    __jarvisOrb?: () => OrbSnapshot & { frameCostMs: number; quality: number };
   }
 }
 
@@ -31,15 +31,19 @@ export function OrbCanvas({ state, readAudio, label }: Props) {
     const canvas = canvasRef.current;
     const engine = engineRef.current!;
     const ctx = canvas?.getContext?.("2d") ?? null;
-    window.__jarvisOrb = () => engine.snapshot();
+    let quality = 1; // fração da resolução nativa (adaptativa)
+    let cost = 0; // média móvel do custo de um quadro (ms)
+    window.__jarvisOrb = () => ({ ...engine.snapshot(), frameCostMs: Math.round(cost * 10) / 10, quality });
     const mq = window.matchMedia?.("(prefers-reduced-motion: reduce)");
     engine.reducedMotion = !!mq?.matches;
     if (!canvas || !ctx) return; // ambiente sem canvas (testes): só o estado é mantido
 
     let w = 0;
     let h = 0;
+    // Resolução adaptativa: se os quadros ficarem caros (CPU sem aceleração de vídeo), reduz a
+    // resolução interna para não disputar o processador com a transcrição e a IA locais.
     const resize = () => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2) * quality;
       const rect = canvas.getBoundingClientRect();
       w = Math.max(1, rect.width);
       h = Math.max(1, rect.height);
@@ -53,8 +57,13 @@ export function OrbCanvas({ state, readAudio, label }: Props) {
 
     let raf = 0;
     let last = performance.now();
+    let checkedAt = performance.now();
     const loop = (now: number) => {
-      const dt = (now - last) / 1000;
+      raf = requestAnimationFrame(loop);
+      // 60 quadros/s só quando a animação segue o áudio (ouvindo/falando); nos demais, 30 bastam.
+      const audioDriven = engine.state === "LISTENING" || engine.state === "SPEAKING";
+      if (!audioDriven && now - last < 1000 / 31) return;
+      const dt = Math.min(0.1, (now - last) / 1000);
       last = now;
       let frame: AudioFrame;
       try {
@@ -62,9 +71,18 @@ export function OrbCanvas({ state, readAudio, label }: Props) {
       } catch {
         frame = silentFrame();
       }
+      const t0 = performance.now();
       engine.update(dt, frame);
       engine.draw(ctx, w, h);
-      raf = requestAnimationFrame(loop);
+      cost = cost * 0.9 + (performance.now() - t0) * 0.1;
+      if (now - checkedAt > 2000) {
+        checkedAt = now;
+        const next = cost > 9 ? Math.max(0.5, quality - 0.25) : cost < 3 && quality < 1 ? Math.min(1, quality + 0.25) : quality;
+        if (next !== quality) {
+          quality = next;
+          resize();
+        }
+      }
     };
     raf = requestAnimationFrame(loop);
     return () => {

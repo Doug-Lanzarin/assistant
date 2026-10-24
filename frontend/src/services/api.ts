@@ -45,7 +45,7 @@ function messageFrom(body: unknown, status: number): string {
   return `Erro HTTP ${status}`;
 }
 
-export async function request<T = unknown>(path: string, init: RequestInit & { json?: unknown } = {}): Promise<T> {
+export async function request<T = unknown>(path: string, init: RequestInit & { json?: unknown; timeoutMs?: number } = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const token = auth.token;
   if (token) headers.set("Authorization", `Bearer ${token}`);
@@ -55,10 +55,18 @@ export async function request<T = unknown>(path: string, init: RequestInit & { j
     body = JSON.stringify(init.json);
   }
   let res: Response;
+  const { timeoutMs, json: _json, ...rest } = init;
+  const ctrl = timeoutMs ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
   try {
-    res = await fetch(path, { ...init, headers, body });
+    res = await fetch(path, { ...rest, headers, body, signal: ctrl?.signal ?? rest.signal });
   } catch {
+    if (ctrl?.signal.aborted) {
+      throw new ApiError(0, `O JARVIS não respondeu em ${Math.round((timeoutMs ?? 0) / 1000)} s. Tente de novo ou use um pedido mais curto.`);
+    }
     throw new ApiError(0, "Sem conexão com o backend do JARVIS. Ele está em execução?");
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   const ctype = res.headers.get("content-type") ?? "";
   const data = ctype.includes("json") ? await res.json().catch(() => null) : await res.text();
@@ -71,11 +79,11 @@ export async function request<T = unknown>(path: string, init: RequestInit & { j
 
 export const api = {
   get: <T = unknown>(p: string) => request<T>(p),
-  post: <T = unknown>(p: string, json?: unknown) => request<T>(p, { method: "POST", json: json ?? {} }),
+  post: <T = unknown>(p: string, json?: unknown, timeoutMs?: number) => request<T>(p, { method: "POST", json: json ?? {}, timeoutMs }),
   patch: <T = unknown>(p: string, json: unknown) => request<T>(p, { method: "PATCH", json }),
   put: <T = unknown>(p: string, json: unknown) => request<T>(p, { method: "PUT", json }),
   del: <T = unknown>(p: string) => request<T>(p, { method: "DELETE" }),
-  upload: <T = unknown>(p: string, form: FormData) => request<T>(p, { method: "POST", body: form }),
+  upload: <T = unknown>(p: string, form: FormData, timeoutMs?: number) => request<T>(p, { method: "POST", body: form, timeoutMs }),
 };
 
 export function qs(params: Record<string, string | number | boolean | undefined | null>): string {

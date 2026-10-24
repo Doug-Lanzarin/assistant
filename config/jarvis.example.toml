@@ -1,4 +1,6 @@
 # Configuração de permissões do JARVIS.
+# Atalhos de rotina não devem ser simples cumprimentos ("bom dia", "boa noite"):
+# cumprimentos são respondidos como conversa e nunca disparam ações.
 # Copie para config/jarvis.toml e ajuste. Variáveis como %USERPROFILE% e
 # %LOCALAPPDATA% são expandidas. Recarregue em Configurações → Sistema →
 # "Recarregar configuração" (ou reinicie).
@@ -92,7 +94,7 @@ timeout = 600
 # política de permissões/confirmação. Aliases funcionam como frases-gatilho.
 [[routines]]
 name = "início do trabalho"
-aliases = ["inicio do trabalho", "comecar o dia", "desenvolvimento", "ambiente de desenvolvimento", "bom dia"]
+aliases = ["inicio do trabalho", "iniciar o trabalho", "comecar o dia", "ambiente de desenvolvimento"]
 description = "Abre o ambiente de desenvolvimento e mostra as pendências"
 steps = [
   { tool = "open_target", args = { target = "VS Code" } },
@@ -111,7 +113,7 @@ steps = [
 
 [[routines]]
 name = "boa noite"
-aliases = ["rotina de boa noite", "boa noite jarvis", "vou dormir"]
+aliases = ["rotina de boa noite", "modo boa noite", "vou dormir"]
 description = "Executa a cena de boa noite no Home Assistant"
 steps = [
   { tool = "home_scene", args = { name = "boa noite" } },

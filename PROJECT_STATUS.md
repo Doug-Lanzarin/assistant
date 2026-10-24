@@ -4,7 +4,7 @@
 > Branch: `claude/jarvis-v1`.
 
 ## Resumo
-O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 172 testes de backend, 27 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
+O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux de desenvolvimento**, com 217 testes de backend, 36 de interface, testes E2E no navegador e no supervisor, e medições de voz e desempenho. **Ainda não foi executado no Windows de referência** nem conectado às contas e dispositivos reais. Esses itens estão listados como pendências externas abaixo e não devem ser considerados validados.
 
 ## Etapas
 | Etapa | Situação | Observações |
@@ -20,6 +20,18 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 | 9. WhatsApp | 🧪 simulada | Cloud API (envio, webhook HMAC), WhatsApp Web (Playwright, página simulada), notificações (WinRT, não testado) |
 | 10. Estabilização | ✅ | backup/restauração, diagnóstico, autostart, recuperação de falhas, documentação, relatórios |
 
+## Usabilidade da voz (24/10/2026)
+Relato: "falo boa noite e fica só processando; a voz é chata e virtual; quero o menu sempre fechado". Causas encontradas e corrigidas, com medições em [docs/VOZ.md](docs/VOZ.md):
+- modelo de transcrição carregado só no 1º uso (~24 s);
+- `base`/beam 1 errando frases curtas;
+- cumprimentos indo para a IA ou disparando rotinas;
+- fim de fala que não detectava silêncio com ruído;
+- nenhum limite de tempo;
+- IA local recebendo ~7 mil tokens de ferramentas e com contexto cortado pelo Ollama;
+- animação do orb disputando a CPU.
+
+Voz padrão agora é a **Cadu** (Piper), com seletor e amostras; o menu lateral abre só pelo ☰. Pendente: Ollama real e medição no i5.
+
 ## Instalação e inicialização
 `setup.bat` (configuração idempotente e retomável: pré-requisitos via `winget` com confirmação, ambiente virtual, dependências, interface, configuração, banco, IA híbrida, voz, microfone, testes de integridade, relatório e indicador) e `start.bat` (verificações, ordem de inicialização, logs na janela, encerramento com Ctrl+C). Validados numa cópia limpa em Linux e no `cmd` do Wine; **pendente no Windows real**. Ver [docs/INSTALACAO.md](docs/INSTALACAO.md).
 
@@ -27,8 +39,8 @@ O sistema está **implementado de ponta a ponta** e **testado em ambiente Linux 
 Tela inicial `/#/jarvis` com animação dirigida por áudio real (microfone, Piper e níveis do agente) e **máquina de estados explícita** (OFF, IDLE azul profundo, LISTENING verde-ciano, THINKING violeta, SPEAKING azul elétrico, ERROR vermelho), alimentada só por eventos reais de microfone, processamento e TTS. Validada ponta a ponta com áudio real no Chromium: correlação de 0,99 entre a amplitude da voz e o raio do núcleo. Ver [docs/ORB.md](docs/ORB.md).
 
 ## Testes executados (2026-10-22)
-- `backend`: **172 aprovados** (`python -m pytest -q`), ruff sem pendências.
-- `frontend`: **27 aprovados** (`npm test`), `tsc` estrito e build ok.
+- `backend`: **217 aprovados** (`python -m pytest -q`), ruff sem pendências.
+- `frontend`: **36 aprovados** (`npm test`), `tsc` estrito e build ok.
 - E2E: painel real no Chromium (todas as telas, desktop e celular), supervisor (instância única, reinício controlado, `kill -9` → recuperação, parada limpa), agente real via WebSocket.
 - Voz: Piper → faster-whisper (tiny/base/small) e custo do openWakeWord.
 - IA local real (llama.cpp + Qwen2.5-1.5B): chamadas de ferramenta reais; 3 defeitos encontrados e corrigidos (formato de mensagem, ações duplicadas, edições sem confirmação).

@@ -47,6 +47,9 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
   const agentLevel = useRef<AgentLevel>({ level: 0, at: 0, source: "mic" });
   const agentBands = useRef(new Float32Array(BAND_COUNT));
   const requesting = useRef(false); // pedido desta tela em andamento
+  const [notice, setNotice] = useState<string | null>(null); // aviso sem erro (ex.: "não ouvi nada")
+  const [waited, setWaited] = useState(0); // segundos em THINKING
+  const [sttLoading, setSttLoading] = useState(false);
 
   // Eventos reais do navegador (microfone/TTS) → máquina de estados.
   const onVoiceEvent = useCallback((e: VoiceEvent) => {
@@ -68,6 +71,26 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
   useEffect(() => {
     if (cid) sessionStorage.setItem("jarvis.orb.cid", String(cid));
   }, [cid]);
+
+  // Processando há muito tempo: mostra o tempo e o motivo provável (nunca fica "mudo").
+  useEffect(() => {
+    if (state !== "THINKING") {
+      setWaited(0);
+      setSttLoading(false);
+      return;
+    }
+    const t0 = performance.now();
+    let asked = false;
+    const iv = setInterval(() => {
+      const secs = Math.floor((performance.now() - t0) / 1000);
+      setWaited(secs);
+      if (secs >= 3 && !asked && current.current.processing === "transcription") {
+        asked = true;
+        api.get<{ stt_loading?: string | null }>("/api/voice/status").then((st) => setSttLoading(Boolean(st.stt_loading))).catch(() => {});
+      }
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [state, machine.since, current]);
 
   // ERROR: pulsos e brilho estável por um tempo, depois volta ao repouso.
   useEffect(() => {
@@ -135,11 +158,13 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
       setHeard(t);
       setReply("");
       setFailure(null);
+      setNotice(null);
       requesting.current = true;
       dispatch({ type: "PROCESSING_STARTED", what: "request" });
       let r: ChatReply;
       try {
-        r = await api.post<ChatReply>("/api/chat", { text: t, conversation_id: cid, origin });
+        // O backend encerra pedidos à IA em 150 s; a margem cobre a rede e a resposta.
+        r = await api.post<ChatReply>("/api/chat", { text: t, conversation_id: cid, origin }, 180_000);
       } catch (e) {
         requesting.current = false;
         const reason = `Falha no processamento: ${(e as Error).message}`;
@@ -162,12 +187,16 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
   );
 
   const listen = useCallback(() => {
+    setNotice(null);
     void voice.startListening({
       onUtterance: (said) => {
         if (said) void send(said, "voice");
+        else if (said === null && current.current.state !== "ERROR") {
+          setNotice("Não ouvi nada. Toque no microfone e fale logo em seguida, perto do microfone.");
+        }
       },
     });
-  }, [voice, send]);
+  }, [voice, send, current]);
   const listenRef = useRef(listen);
   listenRef.current = listen;
 
@@ -254,6 +283,15 @@ export function Orb({ voiceSettings }: { voiceSettings: VoiceSettings | null }) 
         {reply && <p className="orb-reply">{reply.length > 420 ? `${reply.slice(0, 420)}…` : reply}</p>}
         {!heard && !reply && active && <p className="orb-hint">Pressione <kbd>Espaço</kbd> ou toque no microfone e fale. <kbd>Esc</kbd> interrompe.</p>}
         {!active && <p className="orb-hint">Toque em <strong>Iniciar</strong> para ativar o JARVIS.</p>}
+        {state === "THINKING" && waited >= 3 && (
+          <p className="orb-wait">
+            {machine.processing === "transcription"
+              ? (sttLoading ? "Preparando o reconhecimento de voz (só na primeira vez)…" : "Transcrevendo o que você disse…")
+              : waited >= 12 ? `Ainda pensando… ${waited} s. Modelos locais no processador podem levar até 1 minuto; Esc cancela.`
+                : `Pensando… ${waited} s`}
+          </p>
+        )}
+        {notice && !failure && <p className="orb-hint">{notice}</p>}
         {(failure || voice.error) && <p className="orb-error" role="alert">{failure ?? voice.error}</p>}
         {frameSource && <p className="orb-source">sincronia: {SOURCE_LABEL[frameSource]}</p>}
       </div>
